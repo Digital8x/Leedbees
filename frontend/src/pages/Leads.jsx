@@ -371,7 +371,7 @@ export default function Leads() {
             <col style={{ width:95 }} />
             {isAdmin && <col style={{ width:88 }} />}{/* Project */}
             {isAdmin && <col style={{ width:120 }} />}{/* Assigned */}
-            <col style={{ width:70 }} />
+            {isAdmin && <col style={{ width:70 }} />}
             <col style={{ width:115 }} />
             {isAdmin && <col style={{ width:60 }} />}{/* Country - admin only */}
             {isAdmin && <col style={{ width:82 }} />}{/* IP - admin only */}
@@ -393,7 +393,7 @@ export default function Leads() {
               <th style={{ ...thStyle, width:95 }}>Phone</th>
               {isAdmin && <th style={{ ...thStyle, width:88 }}>Project</th>}
               {isAdmin && <Th label="Assigned" col="assigned" width={120} sortBy={sortBy} setSortBy={setSortBy} sortDir={sortDir} setSortDir={setSortDir} style={thStyle}/>}
-              <Th label="Date"    col="date"     width={70}  sortBy={sortBy} setSortBy={setSortBy} sortDir={sortDir} setSortDir={setSortDir} style={thStyle}/>
+              {isAdmin && <Th label="Date"    col="date"     width={70}  sortBy={sortBy} setSortBy={setSortBy} sortDir={sortDir} setSortDir={setSortDir} style={thStyle}/>}
               <th style={{ ...thStyle, width:115 }}>Status</th>
               {isAdmin && <th style={{ ...thStyle, width:60 }}>Country</th>}
               {isAdmin && <th style={{ ...thStyle, width:82 }}>IP</th>}
@@ -443,7 +443,7 @@ export default function Leads() {
                     </select>
                   </td>
                 )}
-                <td style={{ ...tdStyle, fontSize:'0.7rem' }}>{fmtDate(lead.created_at)}</td>
+                {isAdmin && <td style={{ ...tdStyle, fontSize:'0.7rem' }}>{fmtDate(lead.created_at)}</td>}
                 <td style={{ padding:'4px 6px' }}>
                   <select style={cs} value={lead.status || 'New'} onChange={e => quickStatus(lead.id, e.target.value)}>
                     {STATUSES.map(s => <option key={s}>{s}</option>)}
