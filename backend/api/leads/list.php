@@ -20,7 +20,7 @@ $pdo = Database::getConnection();
 
 // --- Query Params ---
 $page        = max(1, (int)($_GET['page'] ?? 1));
-$limit       = min(200, max(10, (int)($_GET['limit'] ?? 50)));
+$limit       = min(1000, max(10, (int)($_GET['limit'] ?? 50)));
 $offset      = ($page - 1) * $limit;
 $search      = trim($_GET['search'] ?? '');
 $status      = trim($_GET['status'] ?? '');
