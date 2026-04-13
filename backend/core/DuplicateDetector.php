@@ -21,13 +21,19 @@ class DuplicateDetector
      */
     public function processLead(array $row, string $batchId, int $uploadedBy): array
     {
-        $phone  = $this->normalizePhone($row['phone'] ?? '');
-        $name   = trim($row['name'] ?? '');
-        $email  = trim($row['email'] ?? '');
-        $source = trim($row['source'] ?? '');
-        $campaign = trim($row['campaign'] ?? '');
-        $city   = trim($row['city'] ?? '');
-        $project = trim($row['project'] ?? '');
+        $phone    = $this->normalizePhone($row['phone'] ?? '');
+        $name     = trim($row['name']      ?? '');
+        $email    = trim($row['email']     ?? '');
+        $source   = trim($row['source']    ?? '');
+        $campaign = trim($row['campaign']  ?? '');
+        $city     = trim($row['city']      ?? '');
+        $project  = trim($row['project']   ?? '');
+        $entryId  = trim((string)($row['entry_id']   ?? '')) ?: null;
+        $referUrl = trim((string)($row['refer_url']  ?? '')) ?: null;
+        $ipAddr   = trim((string)($row['ip_address'] ?? '')) ?: null;
+        $country  = trim((string)($row['country']    ?? '')) ?: null;
+        $device   = $row['device'] ?? null;
+        $isNri    = isset($row['is_nri']) ? (int)$row['is_nri'] : 0;
 
         if (empty($phone)) {
             return ['action' => 'skipped', 'lead_id' => 0];
@@ -45,26 +51,36 @@ class DuplicateDetector
                 "UPDATE leads SET duplicate_count = ?, is_duplicate = 1, updated_at = NOW() WHERE id = ?"
             )->execute([$newCount, $existing['id']]);
 
-            // Add to lead_sources
             $this->addLeadSource($existing['id'], $source, $campaign, $batchId, $uploadedBy);
-
-            // Log timeline
             $this->logTimeline($existing['id'], 'Uploaded', "Duplicate upload from batch {$batchId}", $uploadedBy, null);
 
             return ['action' => 'duplicate', 'lead_id' => $existing['id']];
         } else {
             // --- NEW LEAD ---
             $stmt = $this->pdo->prepare(
-                "INSERT INTO leads (phone, name, email, city, project, first_source, first_batch_id, status, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 'New', NOW())"
+                "INSERT INTO leads
+                    (phone, name, email, city, project, entry_id, refer_url, ip_address, country, device, is_nri,
+                     first_source, first_batch_id, status, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', NOW())"
             );
-            $stmt->execute([$phone, $name ?: null, $email ?: null, $city ?: null, $project ?: null, $source ?: null, $batchId]);
+            $stmt->execute([
+                $phone,
+                $name    ?: null,
+                $email   ?: null,
+                $city    ?: null,
+                $project ?: null,
+                $entryId,
+                $referUrl,
+                $ipAddr,
+                $country,
+                $device,
+                $isNri,
+                $source  ?: null,
+                $batchId,
+            ]);
             $leadId = (int)$this->pdo->lastInsertId();
 
-            // Add to lead_sources
             $this->addLeadSource($leadId, $source, $campaign, $batchId, $uploadedBy);
-
-            // Log timeline
             $this->logTimeline($leadId, 'Uploaded', "New lead uploaded via batch {$batchId}", $uploadedBy, null);
 
             return ['action' => 'new', 'lead_id' => $leadId];
