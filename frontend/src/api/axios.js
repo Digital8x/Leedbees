@@ -6,14 +6,12 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// ---- Attach JWT on every request ----
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('lead8x_token')
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 }, Promise.reject)
 
-// ---- Handle 401 globally (session expired) ----
 api.interceptors.response.use(
   res => res,
   err => {
@@ -26,24 +24,29 @@ api.interceptors.response.use(
   }
 )
 
-// ---- Auth ----
+// Auth
 export const login = (email, password) =>
   api.post('/auth/login.php', { email, password })
 
-// ---- Leads ----
+// Leads
 export const getLeads = (params) =>
   api.get('/leads/list.php', { params })
 
+// Download: pass export_ids as comma string for selection-wise
 export const downloadLeads = (params) =>
   api.get('/leads/download.php', { params, responseType: 'blob' })
 
-// Step 1: upload file → preview
+// Upload Step 1: parse + preview
 export const uploadLeadsPreview = (formData) =>
   api.post('/leads/upload.php', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
 
-// Step 2: confirm upload with project name + refer_url
+// Upload Step 2: confirm save
 export const confirmUpload = (data) =>
   api.post('/leads/upload-confirm.php', data)
+
+// Feedback Sync upload
+export const uploadFeedback = (formData) =>
+  api.post('/leads/upload-feedback.php', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
 
 export const updateFeedback = (data) =>
   api.post('/leads/feedback.php', data)
@@ -60,29 +63,29 @@ export const deleteLeads = (data) =>
 export const mergeLeads = (ids) =>
   api.post('/leads/merge.php', { ids })
 
-// ---- Projects ----
+// Projects
 export const getProjects = () =>
   api.get('/projects/list.php')
 
 export const saveProject = (data) =>
   api.post('/projects/save.php', data)
 
-// ---- Distribution ----
-export const distribute = (data) =>
-  api.post('/distribution/distribute.php', data)
-
-// ---- Users ----
+// Users
 export const getUsers    = ()     => api.get('/users/list.php')
 export const createUser  = (data) => api.post('/users/create.php', data)
 export const updateUser  = (data) => api.put('/users/update.php', data)
 export const deleteUser  = (id)   => api.delete('/users/delete.php', { data: { id } })
 
-// ---- Admin ----
-export const getStats       = ()     => api.get('/admin/stats.php')
-export const getActivityLog = (p)    => api.get('/admin/activity-log.php', { params: p })
-export const downloadBackup = ()     => api.post('/admin/backup.php', {}, { responseType: 'blob' })
+// Distribution
+export const distribute = (data) =>
+  api.post('/distribution/distribute.php', data)
 
-// ---- Helpers ----
+// Admin
+export const getStats       = ()  => api.get('/admin/stats.php')
+export const getActivityLog = (p) => api.get('/admin/activity-log.php', { params: p })
+export const downloadBackup = ()  => api.post('/admin/backup.php', {}, { responseType: 'blob' })
+
+// Helper
 export const triggerDownload = (blob, filename) => {
   const url = window.URL.createObjectURL(blob)
   const a   = document.createElement('a')

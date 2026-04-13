@@ -70,6 +70,17 @@ try {
         $row['entry_id'] = trim((string)($row['entry_id'] ?? '')) ?: null;
         $row['ip_address'] = trim((string)($row['ip_address'] ?? '')) ?: null;
 
+        // Device normalization
+        $rawDevice = strtolower(trim((string)($row['device'] ?? '')));
+        if ($rawDevice !== '') {
+            $isSafari = str_contains($rawDevice, 'safari') || str_contains($rawDevice, 'iphone')
+                     || str_contains($rawDevice, 'ios')   || str_contains($rawDevice, 'ipad')
+                     || str_contains($rawDevice, 'mac');
+            $row['device'] = $isSafari ? 'Safari | iPhone' : 'Chrome | Windows';
+        } else {
+            $row['device'] = null;
+        }
+
         $result = $detector->processLead($row, $batchId, (int)$user['id']);
         $stats[$result['action']]++;
     }

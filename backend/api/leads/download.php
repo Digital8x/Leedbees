@@ -1,5 +1,6 @@
 <?php
 // backend/api/leads/download.php
+// Supports: all leads, project-wise, selection-wise (by IDs), batch
 
 declare(strict_types=1);
 
@@ -18,35 +19,48 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     Response::error('Method not allowed', 405);
 }
 
-$pdo = Database::getConnection();
-
-// Build query based on role
-$where    = "WHERE 1=1";
+$pdo      = Database::getConnection();
+$where    = "WHERE l.deleted_at IS NULL";
 $bindings = [];
 
+// Role: callers only see their own leads
 if (in_array($user['role'], ['Caller', 'Relationship Manager'], true)) {
-    $where   .= ' AND l.assigned_to = ?';
+    $where .= ' AND l.assigned_to = ?';
     $bindings[] = $user['id'];
 }
 
-$batchId = trim($_GET['batch_id'] ?? '');
-if ($batchId) {
-    $where .= ' AND l.first_batch_id = ?';
-    $bindings[] = $batchId;
+// Selection-wise (comma-separated IDs)
+$exportIds = trim($_GET['export_ids'] ?? '');
+if ($exportIds !== '') {
+    $ids  = array_filter(array_map('intval', explode(',', $exportIds)), fn($id) => $id > 0);
+    if (!empty($ids)) {
+        $ph    = implode(',', array_fill(0, count($ids), '?'));
+        $where .= " AND l.id IN ({$ph})";
+        $bindings = array_merge($bindings, $ids);
+    }
 }
 
+// Project filter
+$project = trim($_GET['project'] ?? '');
+if ($project) { $where .= ' AND l.project = ?'; $bindings[] = $project; }
+
+// Status filter
 $status = trim($_GET['status'] ?? '');
-if ($status) {
-    $where .= ' AND l.status = ?';
-    $bindings[] = $status;
-}
+if ($status) { $where .= ' AND l.status = ?'; $bindings[] = $status; }
 
-$sql = "SELECT l.*, u.name AS assigned_to_name, la.assigned_at
+// Batch filter
+$batchId = trim($_GET['batch_id'] ?? '');
+if ($batchId) { $where .= ' AND l.first_batch_id = ?'; $bindings[] = $batchId; }
+
+// NRI filter
+if (isset($_GET['is_nri'])) { $where .= ' AND l.is_nri = ?'; $bindings[] = (int)$_GET['is_nri']; }
+
+$sql = "SELECT l.id, l.name, l.phone, l.email, l.project, l.status, l.country,
+               l.ip_address, l.device, l.refer_url, l.remark, l.entry_id,
+               l.is_nri, l.created_at,
+               u.name AS assigned_to_name
         FROM leads l
         LEFT JOIN users u ON l.assigned_to = u.id
-        LEFT JOIN (
-            SELECT lead_id, MAX(assigned_at) AS assigned_at FROM lead_assignments GROUP BY lead_id
-        ) la ON la.lead_id = l.id
         {$where}
         ORDER BY l.created_at DESC";
 
@@ -58,18 +72,17 @@ if (empty($leads)) {
     Response::error('No leads found for the selected criteria.');
 }
 
-// Generate Excel
 $fileName = ExcelHandler::generateLeadsExcel($leads, 'Leads_' . date('Y_m_d'));
 
-// Log timeline for downloaded leads
 $detector = new DuplicateDetector($pdo);
 foreach ($leads as $lead) {
-    $detector->logTimeline((int)$lead['id'], 'Downloaded', "Downloaded by {$user['name']}", (int)$user['id'], $user['name']);
+    $detector->logTimeline((int)$lead['id'], 'Downloaded',
+        "Downloaded by {$user['name']}", (int)$user['id'], $user['name']);
 }
 
-Auth::logActivity($pdo, (int)$user['id'], $user['name'], 'Download', count($leads) . ' leads downloaded.');
+Auth::logActivity($pdo, (int)$user['id'], $user['name'], 'Download',
+    count($leads) . ' leads downloaded.');
 
-// Stream file
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 header('Content-Disposition: attachment; filename="Leads_' . date('Y_m_d_His') . '.xlsx"');
 header('Content-Length: ' . filesize($fileName));

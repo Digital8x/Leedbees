@@ -1,5 +1,5 @@
 <?php
-// backend/api/leads/list.php
+// backend/api/leads/list.php — v3
 
 declare(strict_types=1);
 
@@ -22,28 +22,39 @@ $pdo = Database::getConnection();
 $page        = max(1, (int)($_GET['page'] ?? 1));
 $limit       = min(1000, max(10, (int)($_GET['limit'] ?? 50)));
 $offset      = ($page - 1) * $limit;
-$search      = trim($_GET['search'] ?? '');
-$status      = trim($_GET['status'] ?? '');
-$batchId     = trim($_GET['batch_id'] ?? '');
+$search      = trim($_GET['search']     ?? '');
+$status      = trim($_GET['status']     ?? '');
+$batchId     = trim($_GET['batch_id']   ?? '');
 $isDup       = isset($_GET['is_duplicate']) ? (int)$_GET['is_duplicate'] : null;
 $isNri       = isset($_GET['is_nri'])       ? (int)$_GET['is_nri']       : null;
-$assignee    = trim($_GET['assigned_to'] ?? '');
-$project     = trim($_GET['project'] ?? '');
-$showDeleted = isset($_GET['show_deleted']) && $_GET['show_deleted'] === '1';
+$assignee    = trim($_GET['assigned_to']    ?? '');
+$project     = trim($_GET['project']        ?? '');
+$device      = trim($_GET['device']         ?? '');
+$dateFrom    = trim($_GET['date_from']      ?? '');
+$dateTo      = trim($_GET['date_to']        ?? '');
+$showDeleted = ($_GET['show_deleted'] ?? '') === '1';
 
-// --- Role-based filtering ---
+// Sort
+$allowedSorts = ['name' => 'l.name', 'assigned' => 'u.name', 'date' => 'l.created_at', 'id' => 'l.id'];
+$sortBy  = $allowedSorts[$_GET['sort_by'] ?? 'date'] ?? 'l.created_at';
+$sortDir = strtoupper($_GET['sort_dir'] ?? 'DESC') === 'ASC' ? 'ASC' : 'DESC';
+
+// Role-based filtering
 $roleFilter = '';
 $bindings   = [];
 
-if (in_array($user['role'], ['Caller', 'Relationship Manager'], true)) {
-    $roleFilter = ' AND l.assigned_to = ?';
-    $bindings[] = $user['id'];
+$isCallerRole = in_array($user['role'], ['Caller', 'Relationship Manager'], true);
+if ($isCallerRole) {
+    $roleFilter  = ' AND l.assigned_to = ?';
+    $bindings[]  = $user['id'];
+    // Callers cannot see Not Interested leads
+    $roleFilter .= " AND l.status != 'Not Interested'";
 }
 
-// --- WHERE clauses ---
+// WHERE
 $where = "WHERE 1=1{$roleFilter}";
 
-// Only show non-deleted by default
+// Deleted / active
 if (!$showDeleted) {
     $where .= ' AND l.deleted_at IS NULL';
 } else {
@@ -51,44 +62,32 @@ if (!$showDeleted) {
 }
 
 if ($search !== '') {
-    $where .= ' AND (l.phone LIKE ? OR l.name LIKE ? OR l.email LIKE ?)';
-    $bindings[] = "%{$search}%";
-    $bindings[] = "%{$search}%";
-    $bindings[] = "%{$search}%";
+    $where .= ' AND (l.phone LIKE ? OR l.name LIKE ? OR l.email LIKE ? OR l.id LIKE ?)';
+    $bindings[] = "%{$search}%"; $bindings[] = "%{$search}%";
+    $bindings[] = "%{$search}%"; $bindings[] = "%{$search}%";
 }
-if ($status !== '') {
-    $where .= ' AND l.status = ?';
-    $bindings[] = $status;
-}
-if ($batchId !== '') {
-    $where .= ' AND l.first_batch_id = ?';
-    $bindings[] = $batchId;
-}
-if ($isDup !== null) {
-    $where .= ' AND l.is_duplicate = ?';
-    $bindings[] = $isDup;
-}
-if ($isNri !== null) {
-    $where .= ' AND l.is_nri = ?';
-    $bindings[] = $isNri;
-}
-if ($assignee !== '') {
-    $where .= ' AND l.assigned_to = ?';
-    $bindings[] = $assignee;
-}
-if ($project !== '') {
-    $where .= ' AND l.project = ?';
-    $bindings[] = $project;
-}
+if ($status !== '') { $where .= ' AND l.status = ?'; $bindings[] = $status; }
+if ($batchId !== '') { $where .= ' AND l.first_batch_id = ?'; $bindings[] = $batchId; }
+if ($isDup !== null) { $where .= ' AND l.is_duplicate = ?'; $bindings[] = $isDup; }
+if ($isNri !== null) { $where .= ' AND l.is_nri = ?'; $bindings[] = $isNri; }
+if ($assignee !== '') { $where .= ' AND l.assigned_to = ?'; $bindings[] = $assignee; }
+if ($project !== '') { $where .= ' AND l.project = ?'; $bindings[] = $project; }
+if ($device !== '') { $where .= ' AND l.device LIKE ?'; $bindings[] = "%{$device}%"; }
+if ($dateFrom !== '') { $where .= ' AND DATE(l.created_at) >= ?'; $bindings[] = $dateFrom; }
+if ($dateTo !== '') { $where .= ' AND DATE(l.created_at) <= ?'; $bindings[] = $dateTo; }
 
-// --- Count ---
-$countStmt = $pdo->prepare("SELECT COUNT(*) FROM leads l {$where}");
+// Count
+$countStmt = $pdo->prepare("SELECT COUNT(*) FROM leads l LEFT JOIN users u ON l.assigned_to = u.id {$where}");
 $countStmt->execute($bindings);
 $total = (int)$countStmt->fetchColumn();
 
-// --- Data ---
+// Data
 $sql = "
-    SELECT l.*, u.name AS assigned_to_name,
+    SELECT l.id, l.entry_id, l.name, l.phone, l.email, l.project, l.status,
+           l.country, l.ip_address, l.device, l.refer_url, l.remark,
+           l.is_nri, l.is_duplicate, l.first_batch_id,
+           l.created_at, l.updated_at, l.deleted_at,
+           l.assigned_to, u.name AS assigned_to_name,
            la.assigned_at
     FROM leads l
     LEFT JOIN users u ON l.assigned_to = u.id
@@ -97,7 +96,7 @@ $sql = "
         FROM lead_assignments GROUP BY lead_id
     ) la ON la.lead_id = l.id
     {$where}
-    ORDER BY l.created_at DESC
+    ORDER BY {$sortBy} {$sortDir}
     LIMIT ? OFFSET ?
 ";
 $bindings[] = $limit;
@@ -106,6 +105,14 @@ $bindings[] = $offset;
 $stmt = $pdo->prepare($sql);
 $stmt->execute($bindings);
 $leads = $stmt->fetchAll();
+
+// Callers: strip project name
+if ($isCallerRole) {
+    $leads = array_map(function($l) {
+        unset($l['project']);
+        return $l;
+    }, $leads);
+}
 
 Response::success('OK', [
     'leads'       => $leads,
