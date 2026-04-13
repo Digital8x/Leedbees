@@ -367,16 +367,16 @@ export default function Leads() {
           <colgroup>
             {isAdmin && <col style={{ width:30 }} />}
             <col style={{ width:40 }} />
+            <col style={{ width:88 }} />
             <col style={{ width:95 }} />
-            <col style={{ width:95 }} />
-            {isAdmin && <col style={{ width:120 }} />}
-            <col style={{ width:72 }} />
+            {isAdmin && <col style={{ width:88 }} />}{/* Project */}
+            {isAdmin && <col style={{ width:120 }} />}{/* Assigned */}
+            <col style={{ width:70 }} />
             <col style={{ width:115 }} />
-            <col style={{ width:90 }} />
-            <col style={{ width:60 }} />
-            <col style={{ width:85 }} />
-            <col style={{ width:90 }} />
-            <col style={{ width:90 }} />
+            {isAdmin && <col style={{ width:60 }} />}{/* Country - admin only */}
+            {isAdmin && <col style={{ width:82 }} />}{/* IP - admin only */}
+            <col style={{ width:88 }} />
+            <col style={{ width:88 }} />
             <col style={{ width:76 }} />
           </colgroup>
           <thead>
@@ -388,17 +388,17 @@ export default function Leads() {
                   </button>
                 </th>
               )}
-              <Th label="ID"   col="id"   width={40}  sortBy={sortBy} setSortBy={setSortBy} sortDir={sortDir} setSortDir={setSortDir} style={thStyle}/>
-              <Th label="Name" col="name" width={95}  sortBy={sortBy} setSortBy={setSortBy} sortDir={sortDir} setSortDir={setSortDir} style={thStyle}/>
+              <Th label="ID"      col="id"       width={40}  sortBy={sortBy} setSortBy={setSortBy} sortDir={sortDir} setSortDir={setSortDir} style={thStyle}/>
+              <Th label="Name"    col="name"     width={88}  sortBy={sortBy} setSortBy={setSortBy} sortDir={sortDir} setSortDir={setSortDir} style={thStyle}/>
               <th style={{ ...thStyle, width:95 }}>Phone</th>
+              {isAdmin && <th style={{ ...thStyle, width:88 }}>Project</th>}
               {isAdmin && <Th label="Assigned" col="assigned" width={120} sortBy={sortBy} setSortBy={setSortBy} sortDir={sortDir} setSortDir={setSortDir} style={thStyle}/>}
-              <Th label="Date" col="date" width={72}  sortBy={sortBy} setSortBy={setSortBy} sortDir={sortDir} setSortDir={setSortDir} style={thStyle}/>
+              <Th label="Date"    col="date"     width={70}  sortBy={sortBy} setSortBy={setSortBy} sortDir={sortDir} setSortDir={setSortDir} style={thStyle}/>
               <th style={{ ...thStyle, width:115 }}>Status</th>
-              <th style={{ ...thStyle, width:90 }}>Device</th>
-              <th style={{ ...thStyle, width:60 }}>Country</th>
-              <th style={{ ...thStyle, width:85 }}>IP</th>
-              <th style={{ ...thStyle, width:90 }}>URL</th>
-              <th style={{ ...thStyle, width:90 }}>Remarks</th>
+              {isAdmin && <th style={{ ...thStyle, width:60 }}>Country</th>}
+              {isAdmin && <th style={{ ...thStyle, width:82 }}>IP</th>}
+              <th style={{ ...thStyle, width:88 }}>URL</th>
+              <th style={{ ...thStyle, width:88 }}>Remarks</th>
               <th style={{ ...thStyle, width:76 }}>Actions</th>
             </tr>
           </thead>
@@ -433,6 +433,9 @@ export default function Leads() {
                     : '—'}
                 </td>
                 {isAdmin && (
+                  <td style={{ ...tdStyle, fontSize:'0.7rem' }} title={lead.project || ''}>{fmt(lead.project)}</td>
+                )}
+                {isAdmin && (
                   <td style={{ padding:'4px 6px' }}>
                     <select style={cs} value={lead.assigned_to || ''} onChange={e => quickAssign(lead.id, e.target.value)}>
                       <option value="">Unassigned</option>
@@ -446,9 +449,8 @@ export default function Leads() {
                     {STATUSES.map(s => <option key={s}>{s}</option>)}
                   </select>
                 </td>
-                <td style={{ ...tdStyle, fontSize:'0.7rem' }} title={lead.device || ''}>{fmt(lead.device)}</td>
-                <td style={{ ...tdStyle, fontSize:'0.7rem' }} title={lead.country || ''}>{fmt(lead.country)}</td>
-                <td style={{ ...tdStyle, fontSize:'0.68rem', color:'var(--text-muted)' }} title={lead.ip_address || ''}>{fmt(lead.ip_address)}</td>
+                {isAdmin && <td style={{ ...tdStyle, fontSize:'0.7rem' }} title={lead.country || ''}>{fmt(lead.country)}</td>}
+                {isAdmin && <td style={{ ...tdStyle, fontSize:'0.68rem', color:'var(--text-muted)' }} title={lead.ip_address || ''}>{fmt(lead.ip_address)}</td>}
                 <td style={{ ...tdStyle, fontSize:'0.7rem' }}>
                   {lead.refer_url
                     ? <a href={lead.refer_url} target="_blank" rel="noreferrer" style={{ color:'var(--primary)', fontSize:'0.7rem' }} title={lead.refer_url}>
