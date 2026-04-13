@@ -1,6 +1,9 @@
 Options -Indexes
 RewriteEngine On
 
+# --- Pass Authorization header to PHP (shared hosting fix) ---
+RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
 # --- Security Headers ---
 Header always set X-Frame-Options "SAMEORIGIN"
 Header always set X-XSS-Protection "1; mode=block"
