@@ -19,17 +19,19 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 $pdo = Database::getConnection();
 
 // --- Query Params ---
-$page     = max(1, (int)($_GET['page'] ?? 1));
-$limit    = min(200, max(10, (int)($_GET['limit'] ?? 50)));
-$offset   = ($page - 1) * $limit;
-$search   = trim($_GET['search'] ?? '');
-$status   = trim($_GET['status'] ?? '');
-$batchId  = trim($_GET['batch_id'] ?? '');
-$isDup    = isset($_GET['is_duplicate']) ? (int)$_GET['is_duplicate'] : null;
-$assignee  = trim($_GET['assigned_to'] ?? '');
+$page        = max(1, (int)($_GET['page'] ?? 1));
+$limit       = min(200, max(10, (int)($_GET['limit'] ?? 50)));
+$offset      = ($page - 1) * $limit;
+$search      = trim($_GET['search'] ?? '');
+$status      = trim($_GET['status'] ?? '');
+$batchId     = trim($_GET['batch_id'] ?? '');
+$isDup       = isset($_GET['is_duplicate']) ? (int)$_GET['is_duplicate'] : null;
+$isNri       = isset($_GET['is_nri'])       ? (int)$_GET['is_nri']       : null;
+$assignee    = trim($_GET['assigned_to'] ?? '');
+$project     = trim($_GET['project'] ?? '');
+$showDeleted = isset($_GET['show_deleted']) && $_GET['show_deleted'] === '1';
 
 // --- Role-based filtering ---
-// Callers & RMs only see their own leads
 $roleFilter = '';
 $bindings   = [];
 
@@ -40,6 +42,13 @@ if (in_array($user['role'], ['Caller', 'Relationship Manager'], true)) {
 
 // --- WHERE clauses ---
 $where = "WHERE 1=1{$roleFilter}";
+
+// Only show non-deleted by default
+if (!$showDeleted) {
+    $where .= ' AND l.deleted_at IS NULL';
+} else {
+    $where .= ' AND l.deleted_at IS NOT NULL';
+}
 
 if ($search !== '') {
     $where .= ' AND (l.phone LIKE ? OR l.name LIKE ? OR l.email LIKE ?)';
@@ -59,9 +68,17 @@ if ($isDup !== null) {
     $where .= ' AND l.is_duplicate = ?';
     $bindings[] = $isDup;
 }
+if ($isNri !== null) {
+    $where .= ' AND l.is_nri = ?';
+    $bindings[] = $isNri;
+}
 if ($assignee !== '') {
     $where .= ' AND l.assigned_to = ?';
     $bindings[] = $assignee;
+}
+if ($project !== '') {
+    $where .= ' AND l.project = ?';
+    $bindings[] = $project;
 }
 
 // --- Count ---

@@ -1,319 +1,512 @@
-import { useEffect, useState, useRef } from 'react'
-import { getLeads, downloadLeads, uploadLeads, updateFeedback, bulkFeedback, getTimeline, triggerDownload } from '../api/axios.js'
-import { Search, Download, Upload, X, Clock, RefreshCw, AlertTriangle } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import {
+  getLeads, uploadLeadsPreview, confirmUpload, updateFeedback, bulkFeedback,
+  getTimeline, deleteLeads, mergeLeads, getProjects, triggerDownload, downloadLeads
+} from '../api/axios.js'
 import toast from 'react-hot-toast'
+import {
+  Search, Upload, Download, Filter, X, ChevronLeft, ChevronRight,
+  Trash2, GitMerge, Globe, Eye, FileText, CheckSquare, Square, AlertTriangle
+} from 'lucide-react'
 
 const STATUSES = ['New','Assigned','Called','Interested','Follow Up','Site Visit','Booked','Not Interested','Wrong Number']
 
-const statusBadgeClass = s => ({
-  'New':'badge-new','Assigned':'badge-assigned','Called':'badge-called',
-  'Interested':'badge-interested','Follow Up':'badge-follow-up','Site Visit':'badge-site-visit',
-  'Booked':'badge-booked','Not Interested':'badge-not-interested','Wrong Number':'badge-wrong-number'
-}[s] || 'badge-new')
+function StatusBadge({ status }) {
+  const map = {
+    'New':'badge-new','Assigned':'badge-assigned','Called':'badge-called',
+    'Interested':'badge-interested','Follow Up':'badge-follow-up','Site Visit':'badge-site-visit',
+    'Booked':'badge-booked','Not Interested':'badge-not-interested','Wrong Number':'badge-wrong-number'
+  }
+  return <span className={`badge ${map[status] || 'badge-new'}`}>{status}</span>
+}
 
 export default function Leads() {
   const user = JSON.parse(localStorage.getItem('lead8x_user') || '{}')
-  const [leads, setLeads]     = useState([])
-  const [total, setTotal]     = useState(0)
-  const [page, setPage]       = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState({ search:'', status:'', batch_id:'' })
-  const [selected, setSelected] = useState(null)
-  const [timeline, setTimeline] = useState(null)
-  const [showUpload, setShowUpload]   = useState(false)
-  const [showFeedback, setShowFeedback] = useState(false)
-  const [showTimeline, setShowTimeline] = useState(false)
-  const [uploadForm, setUploadForm]   = useState({ source:'', campaign:'', file: null })
-  const [fbFile, setFbFile]           = useState(null)
-  const [editRow, setEditRow]         = useState(null)
-  const fileRef = useRef()
-  const fbRef   = useRef()
+  const isAdmin = ['Admin','Manager'].includes(user.role)
 
-  const load = async (p = page) => {
+  // --- State ---
+  const [leads, setLeads]             = useState([])
+  const [total, setTotal]             = useState(0)
+  const [totalPages, setTotalPages]   = useState(1)
+  const [page, setPage]               = useState(1)
+  const [loading, setLoading]         = useState(false)
+
+  const [search, setSearch]           = useState('')
+  const [status, setStatus]           = useState('')
+  const [project, setProject]         = useState('')
+  const [isNri, setIsNri]             = useState(false)
+  const [showDuplicates, setShowDuplicates] = useState(false)
+  const [showDeleted, setShowDeleted] = useState(false)
+
+  const [projects, setProjects]       = useState([])
+  const [selected, setSelected]       = useState([])
+
+  // Upload states
+  const [uploadModal, setUploadModal]   = useState(false)
+  const [previewData, setPreviewData]   = useState(null)
+  const [uploading, setUploading]       = useState(false)
+  const [confirming, setConfirming]     = useState(false)
+  const [projName, setProjName]         = useState('')
+  const [referUrl, setReferUrl]         = useState('')
+
+  // Timeline
+  const [timelineModal, setTimelineModal] = useState(null)
+  const [timeline, setTimeline]           = useState([])
+
+  // Feedback
+  const [feedbackModal, setFeedbackModal] = useState(null)
+  const [feedbackForm, setFeedbackForm]   = useState({ status: '', remark: '' })
+
+  // Merge
+  const [merging, setMerging] = useState(false)
+
+  // Delete confirm
+  const [deleteConfirm, setDeleteConfirm] = useState(null) // { mode, ids?, project? }
+
+  // --- Load ---
+  const loadLeads = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await getLeads({ page: p, limit: 50, ...filters })
+      const params = { page, limit: 50, search, status, project }
+      if (isNri)           params.is_nri = 1
+      if (showDuplicates)  params.is_duplicate = 1
+      if (showDeleted)     params.show_deleted = 1
+      const res = await getLeads(params)
       setLeads(res.data.data.leads)
       setTotal(res.data.data.total)
       setTotalPages(res.data.data.total_pages)
+      setSelected([])
     } catch { toast.error('Failed to load leads.') }
-    finally { setLoading(false) }
+    setLoading(false)
+  }, [page, search, status, project, isNri, showDuplicates, showDeleted])
+
+  useEffect(() => { loadLeads() }, [loadLeads])
+  useEffect(() => { getProjects().then(r => setProjects(r.data.data.projects || [])).catch(() => {}) }, [])
+
+  // --- Upload Step 1 ---
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await uploadLeadsPreview(fd)
+      const d = res.data.data
+      setPreviewData(d)
+      setProjName(d.hidden_values?.[0] || '')
+      setReferUrl('')
+      setUploadModal(true)
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Upload failed.')
+    }
+    setUploading(false)
+    e.target.value = ''
   }
 
-  useEffect(() => { load(1) }, [filters])
+  // --- Upload Step 2 ---
+  const handleConfirmUpload = async () => {
+    if (!projName.trim()) { toast.error('Project Name is required.'); return }
+    setConfirming(true)
+    try {
+      const res = await confirmUpload({
+        parse_id: previewData.parse_id,
+        project_name: projName.trim(),
+        refer_url: referUrl.trim(),
+      })
+      const d = res.data.data
+      toast.success(`✅ ${d.new} new leads saved! ${d.duplicates} duplicates detected.`)
+      setUploadModal(false)
+      setPreviewData(null)
+      loadLeads()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Confirm failed.')
+    }
+    setConfirming(false)
+  }
 
+  // --- Download ---
   const handleDownload = async () => {
     try {
-      const res = await downloadLeads(filters)
-      triggerDownload(res.data, `Leads_${Date.now()}.xlsx`)
-      toast.success('Download started!')
+      const params = { search, status, project }
+      if (isNri) params.is_nri = 1
+      const res = await downloadLeads(params)
+      triggerDownload(res.data, 'leads_export.xlsx')
     } catch { toast.error('Download failed.') }
   }
 
-  const handleUpload = async (e) => {
-    e.preventDefault()
-    if (!uploadForm.file) return toast.error('Select a file.')
-    const fd = new FormData()
-    fd.append('file', uploadForm.file)
-    fd.append('source', uploadForm.source || 'Upload')
-    fd.append('campaign', uploadForm.campaign)
-    try {
-      const res = await uploadLeads(fd)
-      const d = res.data.data
-      toast.success(`✅ ${d.new} new · ${d.duplicates} duplicates · ${d.skipped} skipped`)
-      setShowUpload(false)
-      setUploadForm({ source:'', campaign:'', file:null })
-      load(1)
-    } catch (err) { toast.error(err.response?.data?.message || 'Upload failed.') }
-  }
-
-  const handleBulkFeedback = async (e) => {
-    e.preventDefault()
-    if (!fbFile) return toast.error('Select a feedback file.')
-    const fd = new FormData()
-    fd.append('file', fbFile)
-    try {
-      const res = await bulkFeedback(fd)
-      toast.success(`Updated ${res.data.data.updated} leads`)
-      setShowFeedback(false); setFbFile(null); load()
-    } catch (err) { toast.error(err.response?.data?.message || 'Feedback failed.') }
-  }
-
-  const handleStatusUpdate = async (e) => {
-    e.preventDefault()
-    try {
-      await updateFeedback({ phone: editRow.phone, status: editRow.status, remark: editRow.remark })
-      toast.success('Lead updated')
-      setEditRow(null); load()
-    } catch (err) { toast.error(err.response?.data?.message || 'Update failed.') }
-  }
-
+  // --- Timeline ---
   const openTimeline = async (lead) => {
-    setSelected(lead); setShowTimeline(true)
+    setTimelineModal(lead)
     try {
       const res = await getTimeline(lead.id)
-      setTimeline(res.data.data)
-    } catch { toast.error('Failed to load timeline.') }
+      setTimeline(res.data.data.timeline || [])
+    } catch { setTimeline([]) }
+  }
+
+  // --- Feedback ---
+  const submitFeedback = async () => {
+    try {
+      await updateFeedback({ lead_id: feedbackModal.id, ...feedbackForm })
+      toast.success('Feedback saved.')
+      setFeedbackModal(null)
+      loadLeads()
+    } catch { toast.error('Failed to save feedback.') }
+  }
+
+  // --- Selection ---
+  const toggleSelect = (id) =>
+    setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id])
+  const toggleAll = () =>
+    setSelected(s => s.length === leads.length ? [] : leads.map(l => l.id))
+
+  // --- Delete ---
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return
+    try {
+      await deleteLeads(deleteConfirm)
+      toast.success('Leads deleted.')
+      setDeleteConfirm(null)
+      setSelected([])
+      loadLeads()
+    } catch { toast.error('Delete failed.') }
+  }
+
+  // --- Power Merge ---
+  const handleMerge = async () => {
+    if (selected.length < 2) { toast.error('Select at least 2 leads to merge.'); return }
+    setMerging(true)
+    try {
+      const res = await mergeLeads(selected)
+      toast.success(`✅ Merged into lead #${res.data.data.master_id}`)
+      setSelected([])
+      loadLeads()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Merge failed.')
+    }
+    setMerging(false)
   }
 
   return (
-    <div>
-      <div className="topbar">
-        <h1>Leads <span style={{color:'var(--text-muted)',fontWeight:400,fontSize:'1rem'}}>({total.toLocaleString()})</span></h1>
+    <div className="page">
+      {/* ---- Header ---- */}
+      <div className="topbar" style={{ position: 'sticky', top: 0, zIndex: 50, marginBottom: 24 }}>
+        <h1>Leads <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 400 }}>({total.toLocaleString()})</span></h1>
         <div className="topbar-actions">
-          {['Admin','Manager'].includes(user.role) && (
-            <button id="btn-upload" className="btn btn-primary btn-sm" onClick={() => setShowUpload(true)}><Upload size={15}/> Upload</button>
+          {isAdmin && (
+            <>
+              <label className="btn btn-primary" style={{ cursor: 'pointer' }}>
+                <Upload size={16} /> {uploading ? 'Parsing…' : 'Upload'}
+                <input type="file" accept=".xlsx,.xls,.csv" hidden onChange={handleFileChange} disabled={uploading} />
+              </label>
+              <button className="btn btn-secondary" onClick={handleDownload}><Download size={16} /> Export</button>
+            </>
           )}
-          <button id="btn-bulk-feedback" className="btn btn-secondary btn-sm" onClick={() => setShowFeedback(true)}><Upload size={15}/> Bulk Feedback</button>
-          <button id="btn-download" className="btn btn-secondary btn-sm" onClick={handleDownload}><Download size={15}/> Download</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => load()}><RefreshCw size={14}/></button>
         </div>
       </div>
 
-      <div className="page">
-        {/* Filters */}
-        <div className="filters-bar">
-          <div className="search-box" style={{flex:1}}>
-            <Search size={15}/>
-            <input className="form-input" placeholder="Search phone, name, email…" value={filters.search}
-              onChange={e => setFilters(f => ({ ...f, search: e.target.value }))} />
-          </div>
-          <select className="form-select" style={{width:160}} value={filters.status}
-            onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}>
-            <option value="">All Statuses</option>
-            {STATUSES.map(s => <option key={s}>{s}</option>)}
-          </select>
-          <input className="form-input" style={{width:200}} placeholder="Filter by Batch ID"
-            value={filters.batch_id} onChange={e => setFilters(f => ({ ...f, batch_id: e.target.value }))} />
+      {/* ---- Filters ---- */}
+      <div className="filters-bar">
+        <div className="search-box">
+          <Search size={15} />
+          <input className="form-input" placeholder="Search phone, name, email…" value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1) }} />
         </div>
-
-        {/* Table */}
-        <div className="card" style={{padding:0}}>
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr><th>#</th><th>Phone</th><th>Name</th><th>Status</th><th>Source</th><th>Assigned To</th><th>Duplicate</th><th>Actions</th></tr>
-              </thead>
-              <tbody>
-                {loading
-                  ? <tr><td colSpan={8}><div className="loading-overlay"><div className="spinner"/></div></td></tr>
-                  : leads.length === 0
-                    ? <tr><td colSpan={8}><div className="empty-state"><Search size={40}/><h3>No leads found</h3><p>Try adjusting filters</p></div></td></tr>
-                    : leads.map((l, i) => (
-                        <tr key={l.id} className={l.is_duplicate == 1 ? 'is-duplicate' : ''}>
-                          <td className="text-muted text-xs">{(page-1)*50+i+1}</td>
-                          <td><strong style={{fontFamily:'monospace'}}>{l.phone}</strong></td>
-                          <td>{l.name || <span className="text-muted">–</span>}</td>
-                          <td><span className={`badge ${statusBadgeClass(l.status)}`}>{l.status}</span></td>
-                          <td className="text-xs text-muted truncate" style={{maxWidth:120}}>{l.first_source || '–'}</td>
-                          <td>{l.assigned_to_name || <span className="text-muted">Unassigned</span>}</td>
-                          <td>
-                            {l.is_duplicate == 1
-                              ? <span className="badge" style={{background:'var(--warning-bg)',color:'var(--warning)'}}><AlertTriangle size={10}/> {l.duplicate_count}x</span>
-                              : <span className="text-muted text-xs">–</span>}
-                          </td>
-                          <td>
-                            <div className="flex gap-2">
-                              <button className="btn btn-secondary btn-sm" onClick={() => setEditRow({...l})} title="Edit status/remark">Edit</button>
-                              <button className="btn btn-secondary btn-sm" onClick={() => openTimeline(l)} title="View timeline"><Clock size={13}/></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                }
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="pagination mt-4">
-            <button className="page-btn" disabled={page===1} onClick={() => { setPage(1); load(1) }}>«</button>
-            <button className="page-btn" disabled={page===1} onClick={() => { setPage(p=>p-1); load(page-1) }}>‹</button>
-            {[...Array(Math.min(5, totalPages))].map((_,i) => {
-              const p = Math.max(1, Math.min(page-2, totalPages-4)) + i
-              return <button key={p} className={`page-btn${p===page?' active':''}`} onClick={() => { setPage(p); load(p) }}>{p}</button>
-            })}
-            <button className="page-btn" disabled={page===totalPages} onClick={() => { setPage(p=>p+1); load(page+1) }}>›</button>
-            <button className="page-btn" disabled={page===totalPages} onClick={() => { setPage(totalPages); load(totalPages) }}>»</button>
-          </div>
+        <select className="form-select" style={{ width: 150 }} value={status}
+          onChange={e => { setStatus(e.target.value); setPage(1) }}>
+          <option value="">All Statuses</option>
+          {STATUSES.map(s => <option key={s}>{s}</option>)}
+        </select>
+        <select className="form-select" style={{ width: 150 }} value={project}
+          onChange={e => { setProject(e.target.value); setPage(1) }}>
+          <option value="">All Projects</option>
+          {projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+        </select>
+        <button className={`btn ${isNri ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setIsNri(v => !v); setPage(1) }}>
+          <Globe size={15} /> NRI
+        </button>
+        <button className={`btn ${showDuplicates ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setShowDuplicates(v => !v); setPage(1) }}>
+          <Filter size={15} /> Duplicates
+        </button>
+        {isAdmin && (
+          <button className={`btn ${showDeleted ? 'btn-danger' : 'btn-secondary'}`} onClick={() => { setShowDeleted(v => !v); setPage(1) }}>
+            <Trash2 size={15} /> Deleted
+          </button>
         )}
       </div>
 
-      {/* Upload Modal */}
-      {showUpload && (
-        <div className="modal-overlay" onClick={() => setShowUpload(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>📤 Upload Leads</h3>
-              <button className="modal-close" onClick={() => setShowUpload(false)}><X size={18}/></button>
-            </div>
-            <form onSubmit={handleUpload}>
-              <div className="form-group">
-                <label className="form-label">Source Name *</label>
-                <input className="form-input" placeholder="e.g. MagicBricks, 99Acres" required
-                  value={uploadForm.source} onChange={e => setUploadForm(f=>({...f,source:e.target.value}))}/>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Campaign (optional)</label>
-                <input className="form-input" placeholder="e.g. Diwali 2024"
-                  value={uploadForm.campaign} onChange={e => setUploadForm(f=>({...f,campaign:e.target.value}))}/>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Excel / CSV File *</label>
-                <div className="upload-zone" onClick={() => fileRef.current.click()}>
-                  <Upload size={32}/>
-                  <p>{uploadForm.file ? uploadForm.file.name : 'Click to browse or drag & drop'}</p>
-                  <small>Supports .xlsx, .xls, .csv · Max 50MB</small>
-                </div>
-                <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{display:'none'}}
-                  onChange={e => setUploadForm(f=>({...f,file:e.target.files[0]}))}/>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowUpload(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Upload & Process</button>
-              </div>
-            </form>
-          </div>
+      {/* ---- Bulk Action Bar ---- */}
+      {selected.length > 0 && isAdmin && (
+        <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:16, padding:'12px 16px', background:'var(--bg-elevated)', borderRadius:'var(--radius-md)', border:'1px solid var(--border)' }}>
+          <span style={{ fontWeight:600, color:'var(--accent)' }}>{selected.length} selected</span>
+          <button className="btn btn-danger btn-sm" onClick={() => setDeleteConfirm({ mode:'bulk', ids: selected })}>
+            <Trash2 size={14} /> Delete Selected
+          </button>
+          {showDuplicates && (
+            <button className="btn btn-sm" style={{ background:'var(--primary-light)', color:'var(--accent)' }}
+              onClick={handleMerge} disabled={merging}>
+              <GitMerge size={14} /> {merging ? 'Merging…' : 'Power Merge'}
+            </button>
+          )}
+          <button className="btn btn-secondary btn-sm" onClick={() => setSelected([])}>
+            <X size={14} /> Clear
+          </button>
         </div>
       )}
 
-      {/* Bulk Feedback Modal */}
-      {showFeedback && (
-        <div className="modal-overlay" onClick={() => setShowFeedback(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>📋 Bulk Feedback Upload</h3>
-              <button className="modal-close" onClick={() => setShowFeedback(false)}><X size={18}/></button>
-            </div>
-            <div className="alert alert-info mt-2">Excel must have columns: <strong>Phone, Status, Remark</strong></div>
-            <form onSubmit={handleBulkFeedback}>
-              <div className="form-group">
-                <div className="upload-zone" onClick={() => fbRef.current.click()}>
-                  <Upload size={32}/>
-                  <p>{fbFile ? fbFile.name : 'Click to select feedback file'}</p>
-                  <small>.xlsx, .xls, .csv</small>
-                </div>
-                <input ref={fbRef} type="file" accept=".xlsx,.xls,.csv" style={{display:'none'}} onChange={e => setFbFile(e.target.files[0])}/>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowFeedback(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Submit Feedback</button>
-              </div>
-            </form>
-          </div>
+      {/* ---- Delete by Project ---- */}
+      {isAdmin && (
+        <div style={{ marginBottom: 16, display:'flex', gap:10, alignItems:'center' }}>
+          <select className="form-select" style={{ width:200 }} id="del-project-select"
+            defaultValue="">
+            <option value="">Delete by Project…</option>
+            {projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+          </select>
+          <button className="btn btn-danger btn-sm" onClick={() => {
+            const sel = document.getElementById('del-project-select').value
+            if (!sel) { toast.error('Select a project first.'); return }
+            setDeleteConfirm({ mode:'project', project: sel })
+          }}>
+            <Trash2 size={14} /> Delete All
+          </button>
         </div>
       )}
 
-      {/* Edit Lead Modal */}
-      {editRow && (
-        <div className="modal-overlay" onClick={() => setEditRow(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>✏️ Update Lead — {editRow.phone}</h3>
-              <button className="modal-close" onClick={() => setEditRow(null)}><X size={18}/></button>
-            </div>
-            <form onSubmit={handleStatusUpdate}>
-              <div className="form-group">
-                <label className="form-label">Status</label>
-                <select className="form-select" value={editRow.status}
-                  onChange={e => setEditRow(r => ({...r, status: e.target.value}))}>
-                  {STATUSES.map(s => <option key={s}>{s}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Remark</label>
-                <textarea className="form-textarea" placeholder="Add notes or remark…"
-                  value={editRow.remark || ''} onChange={e => setEditRow(r => ({...r, remark: e.target.value}))}/>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setEditRow(null)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Save Changes</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Timeline Modal */}
-      {showTimeline && selected && (
-        <div className="modal-overlay" onClick={() => { setShowTimeline(false); setTimeline(null) }}>
-          <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>🕐 Timeline — {selected.phone}{selected.name ? ` (${selected.name})` : ''}</h3>
-              <button className="modal-close" onClick={() => { setShowTimeline(false); setTimeline(null) }}><X size={18}/></button>
-            </div>
-            {!timeline
-              ? <div className="loading-overlay"><div className="spinner"/></div>
-              : <>
-                  {timeline.sources?.length > 0 && (
-                    <div style={{marginBottom:20}}>
-                      <div className="section-title" style={{fontSize:'0.85rem'}}>Upload History</div>
-                      {timeline.sources.map((s,i) => (
-                        <div key={i} style={{padding:'8px 12px',background:'var(--bg-elevated)',borderRadius:8,marginBottom:6,fontSize:'0.82rem'}}>
-                          <strong>{s.batch_id}</strong> · {s.source_name || 'Unknown'} · {s.uploaded_by || '–'}
-                          <span className="text-muted" style={{float:'right'}}>{new Date(s.uploaded_at).toLocaleString('en-IN')}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="section-title" style={{fontSize:'0.85rem'}}>Activity Timeline</div>
-                  <div className="timeline">
-                    {timeline.timeline?.map((ev,i) => (
-                      <div className="timeline-item" key={i}>
-                        <div className="timeline-dot"/>
-                        <div className="timeline-content">
-                          <div className="timeline-event">{ev.event_type}</div>
-                          <div className="timeline-desc">{ev.description}</div>
-                          <div className="timeline-meta">by {ev.actor_name || 'System'} · {new Date(ev.created_at).toLocaleString('en-IN')}</div>
-                        </div>
-                      </div>
-                    ))}
+      {/* ---- Table ---- */}
+      <div className="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              {isAdmin && (
+                <th style={{ width:36 }}>
+                  <button style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)' }} onClick={toggleAll}>
+                    {selected.length === leads.length && leads.length > 0 ? <CheckSquare size={16} /> : <Square size={16} />}
+                  </button>
+                </th>
+              )}
+              <th>Phone</th>
+              <th>Name</th>
+              <th>Project Name</th>
+              <th>Status</th>
+              <th>Country</th>
+              <th>NRI</th>
+              <th>Assigned To</th>
+              <th>Remark</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={isAdmin ? 10 : 9} style={{ textAlign:'center', padding:40 }}>
+                <div className="loading-overlay"><div className="spinner" /></div>
+              </td></tr>
+            ) : leads.length === 0 ? (
+              <tr><td colSpan={isAdmin ? 10 : 9}>
+                <div className="empty-state"><FileText size={40} /><h3>No leads found</h3><p>Adjust filters or upload a file</p></div>
+              </td></tr>
+            ) : leads.map(lead => (
+              <tr key={lead.id} className={lead.is_duplicate ? 'is-duplicate' : ''}>
+                {isAdmin && (
+                  <td>
+                    <button style={{ background:'none', border:'none', cursor:'pointer', color: selected.includes(lead.id) ? 'var(--primary)' : 'var(--text-muted)' }}
+                      onClick={() => toggleSelect(lead.id)}>
+                      {selected.includes(lead.id) ? <CheckSquare size={16} /> : <Square size={16} />}
+                    </button>
+                  </td>
+                )}
+                <td><strong>{lead.phone}</strong></td>
+                <td>{lead.name || '—'}</td>
+                <td>{lead.project || '—'}</td>
+                <td><StatusBadge status={lead.status} /></td>
+                <td>{lead.country || '—'}</td>
+                <td>{lead.is_nri ? <span className="badge" style={{ background:'rgba(6,182,212,0.12)', color:'var(--accent-2)' }}>🌍 NRI</span> : '—'}</td>
+                <td>{lead.assigned_to_name || '—'}</td>
+                <td style={{ maxWidth:150 }} className="truncate">{lead.remark || '—'}</td>
+                <td>
+                  <div style={{ display:'flex', gap:6 }}>
+                    <button className="btn btn-secondary btn-sm" title="View Timeline" onClick={() => openTimeline(lead)}><Eye size={13} /></button>
+                    {!showDeleted && <button className="btn btn-secondary btn-sm" title="Edit / Feedback" onClick={() => { setFeedbackModal(lead); setFeedbackForm({ status: lead.status || 'New', remark: lead.remark || '' }) }}>✏️</button>}
+                    {isAdmin && !showDeleted && <button className="btn btn-danger btn-sm" title="Delete" onClick={() => setDeleteConfirm({ mode:'single', ids:[lead.id] })}><Trash2 size={13} /></button>}
                   </div>
-                </>
-            }
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ---- Pagination ---- */}
+      <div className="pagination">
+        <button className="page-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}><ChevronLeft size={16} /></button>
+        {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+          const p = totalPages <= 7 ? i + 1 : page <= 4 ? i + 1 : page + i - 3
+          if (p < 1 || p > totalPages) return null
+          return <button key={p} className={`page-btn ${p === page ? 'active' : ''}`} onClick={() => setPage(p)}>{p}</button>
+        })}
+        <button className="page-btn" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight size={16} /></button>
+      </div>
+
+      {/* ================================================================
+          MODAL: Upload Preview (Step 2)
+      ================================================================ */}
+      {uploadModal && previewData && (
+        <div className="modal-overlay">
+          <div className="modal modal-lg">
+            <div className="modal-header">
+              <h3>📤 Upload Preview — {previewData.total_rows} rows</h3>
+              <button className="modal-close" onClick={() => { setUploadModal(false); setPreviewData(null) }}><X size={18} /></button>
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:20 }}>
+              {/* Project Name */}
+              <div className="form-group" style={{ margin:0 }}>
+                <label className="form-label">Project Name <span style={{ color:'var(--danger)' }}>*</span></label>
+                <input className="form-input" list="project-suggestions" placeholder="Type or select project…"
+                  value={projName} onChange={e => setProjName(e.target.value)} />
+                <datalist id="project-suggestions">
+                  {(previewData.hidden_values || []).map(v => <option key={v} value={v} />)}
+                  {projects.map(p => <option key={p.id} value={p.name} />)}
+                </datalist>
+                <p className="form-hint">Auto-detected from "Hidden Field" column. Override if needed.</p>
+              </div>
+
+              {/* Refer URL */}
+              <div className="form-group" style={{ margin:0 }}>
+                <label className="form-label">Refer URL <span style={{ color:'var(--text-muted)' }}>(optional)</span></label>
+                <input className="form-input" placeholder={previewData.refer_detected ? 'Auto-detected from file' : 'Type URL or leave blank…'}
+                  value={referUrl} onChange={e => setReferUrl(e.target.value)} />
+                <p className="form-hint">{previewData.refer_detected ? 'File has Refer URL column — manual entry overrides all rows.' : 'No Refer URL found in file. Enter manually or leave blank.'}</p>
+              </div>
+            </div>
+
+            {/* Preview Table */}
+            <div style={{ overflowX:'auto', maxHeight:280, border:'1px solid var(--border)', borderRadius:'var(--radius-md)' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th><th>Phone</th><th>Name</th><th>Project Name (Hidden Field)</th><th>Country</th><th>Refer URL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(previewData.preview || []).map((row, i) => (
+                    <tr key={i}>
+                      <td>{i + 1}</td>
+                      <td>{row.phone || '—'}</td>
+                      <td>{row.name || '—'}</td>
+                      <td>{row.hidden_field || row.project || <span style={{ color:'var(--text-muted)' }}>—</span>}</td>
+                      <td>{row.country || '—'}</td>
+                      <td style={{ maxWidth:120 }} className="truncate">{row.refer_url || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {previewData.total_rows > 20 && (
+              <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', marginTop:8 }}>
+                Showing first 20 of {previewData.total_rows} rows. All rows will be imported on confirm.
+              </p>
+            )}
+
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => { setUploadModal(false); setPreviewData(null) }}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleConfirmUpload} disabled={confirming}>
+                {confirming ? 'Saving…' : `✅ Confirm Import (${previewData.total_rows} rows)`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================
+          MODAL: Timeline
+      ================================================================ */}
+      {timelineModal && (
+        <div className="modal-overlay">
+          <div className="modal modal-lg">
+            <div className="modal-header">
+              <h3>📋 Timeline — {timelineModal.phone}</h3>
+              <button className="modal-close" onClick={() => setTimelineModal(null)}><X size={18} /></button>
+            </div>
+            <div style={{ marginBottom:12 }}>
+              <strong>{timelineModal.name}</strong>
+              {timelineModal.project && <span style={{ marginLeft:8, color:'var(--text-muted)' }}>· {timelineModal.project}</span>}
+              {timelineModal.is_nri ? <span className="badge" style={{ marginLeft:8, background:'rgba(6,182,212,0.12)', color:'var(--accent-2)' }}>🌍 NRI</span> : null}
+              {timelineModal.refer_url && <div style={{ marginTop:6, fontSize:'0.78rem', color:'var(--text-muted)' }}>🔗 {timelineModal.refer_url}</div>}
+            </div>
+            {timeline.length === 0 ? (
+              <div className="empty-state"><p>No timeline events yet.</p></div>
+            ) : (
+              <div className="timeline">
+                {timeline.map(ev => (
+                  <div key={ev.id} className="timeline-item">
+                    <div className="timeline-dot" />
+                    <div className="timeline-content">
+                      <div className="timeline-event">{ev.event_type}</div>
+                      <div className="timeline-desc">{ev.description}</div>
+                      <div className="timeline-meta">{ev.actor_name} · {new Date(ev.created_at).toLocaleString('en-IN')}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setTimelineModal(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================
+          MODAL: Feedback / Edit
+      ================================================================ */}
+      {feedbackModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h3>✏️ Update Lead — {feedbackModal.phone}</h3>
+              <button className="modal-close" onClick={() => setFeedbackModal(null)}><X size={18} /></button>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Status</label>
+              <select className="form-select" value={feedbackForm.status} onChange={e => setFeedbackForm(f => ({ ...f, status: e.target.value }))}>
+                {STATUSES.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Remark</label>
+              <textarea className="form-textarea" rows={3} value={feedbackForm.remark}
+                onChange={e => setFeedbackForm(f => ({ ...f, remark: e.target.value }))} />
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setFeedbackModal(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={submitFeedback}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================
+          MODAL: Delete Confirmation
+      ================================================================ */}
+      {deleteConfirm && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h3 style={{ color:'var(--danger)' }}><AlertTriangle size={18} style={{ marginRight:8 }} />Confirm Delete</h3>
+              <button className="modal-close" onClick={() => setDeleteConfirm(null)}><X size={18} /></button>
+            </div>
+            <p style={{ color:'var(--text-secondary)', marginBottom:20 }}>
+              {deleteConfirm.mode === 'project'
+                ? `Delete ALL leads under project "${deleteConfirm.project}"? This cannot be undone.`
+                : deleteConfirm.mode === 'bulk'
+                ? `Delete ${deleteConfirm.ids.length} selected leads?`
+                : `Delete this lead?`
+              }
+            </p>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+              <button className="btn btn-danger" onClick={confirmDelete}>Delete</button>
+            </div>
           </div>
         </div>
       )}

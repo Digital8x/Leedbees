@@ -26,6 +26,8 @@ class ExcelHandler
         'mobile number'  => 'phone',
         'mob'            => 'phone',
         'cell'           => 'phone',
+        'phone number'   => 'phone',
+        'phonenumber'    => 'phone',
 
         // Name
         'name'           => 'name',
@@ -53,6 +55,45 @@ class ExcelHandler
         // Project
         'project'        => 'project',
         'property'       => 'project',
+
+        // Hidden Field → Project Name
+        'hidden field'   => 'hidden_field',
+        'hidden_field'   => 'hidden_field',
+        'hiddenfield'    => 'hidden_field',
+
+        // Entry ID
+        'entry id'       => 'entry_id',
+        'entry_id'       => 'entry_id',
+        'entryid'        => 'entry_id',
+        'id'             => 'entry_id',
+
+        // Country
+        'country'        => 'country',
+
+        // Refer URL
+        'refer url'      => 'refer_url',
+        'refer_url'      => 'refer_url',
+        'referurl'       => 'refer_url',
+        'referrer'       => 'refer_url',
+        'referrer url'   => 'refer_url',
+
+        // IP Address
+        'ip address'     => 'ip_address',
+        'ip_address'     => 'ip_address',
+        'ipaddress'      => 'ip_address',
+        'ip'             => 'ip_address',
+
+        // Device
+        'device'         => 'device',
+
+        // Status
+        'status'         => 'status',
+
+        // Created Time
+        'created time'   => 'created_time',
+        'created_time'   => 'created_time',
+        'createdat'      => 'created_time',
+        'created at'     => 'created_time',
     ];
 
     /**

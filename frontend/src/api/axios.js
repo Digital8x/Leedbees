@@ -37,8 +37,13 @@ export const getLeads = (params) =>
 export const downloadLeads = (params) =>
   api.get('/leads/download.php', { params, responseType: 'blob' })
 
-export const uploadLeads = (formData) =>
+// Step 1: upload file → preview
+export const uploadLeadsPreview = (formData) =>
   api.post('/leads/upload.php', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+
+// Step 2: confirm upload with project name + refer_url
+export const confirmUpload = (data) =>
+  api.post('/leads/upload-confirm.php', data)
 
 export const updateFeedback = (data) =>
   api.post('/leads/feedback.php', data)
@@ -48,6 +53,19 @@ export const bulkFeedback = (formData) =>
 
 export const getTimeline = (lead_id) =>
   api.get('/leads/timeline.php', { params: { lead_id } })
+
+export const deleteLeads = (data) =>
+  api.post('/leads/delete.php', data)
+
+export const mergeLeads = (ids) =>
+  api.post('/leads/merge.php', { ids })
+
+// ---- Projects ----
+export const getProjects = () =>
+  api.get('/projects/list.php')
+
+export const saveProject = (data) =>
+  api.post('/projects/save.php', data)
 
 // ---- Distribution ----
 export const distribute = (data) =>
