@@ -397,7 +397,7 @@ export default function Leads() {
               <th style={{ ...thStyle, width:115 }}>Status</th>
               {isAdmin && <th style={{ ...thStyle, width:60 }}>Country</th>}
               {isAdmin && <th style={{ ...thStyle, width:82 }}>IP</th>}
-              <th style={{ ...thStyle, width:88 }}>URL</th>
+              {isAdmin && <th style={{ ...thStyle, width:88 }}>URL</th>}
               <th style={{ ...thStyle, width:88 }}>Remarks</th>
               <th style={{ ...thStyle, width:76 }}>Actions</th>
             </tr>
@@ -451,13 +451,15 @@ export default function Leads() {
                 </td>
                 {isAdmin && <td style={{ ...tdStyle, fontSize:'0.7rem' }} title={lead.country || ''}>{fmt(lead.country)}</td>}
                 {isAdmin && <td style={{ ...tdStyle, fontSize:'0.68rem', color:'var(--text-muted)' }} title={lead.ip_address || ''}>{fmt(lead.ip_address)}</td>}
-                <td style={{ ...tdStyle, fontSize:'0.7rem' }}>
-                  {lead.refer_url
-                    ? <a href={lead.refer_url} target="_blank" rel="noreferrer" style={{ color:'var(--primary)', fontSize:'0.7rem' }} title={lead.refer_url}>
-                        {lead.refer_url.replace(/^https?:\/\//, '').slice(0, 22)}…
-                      </a>
-                    : '—'}
-                </td>
+                {isAdmin && (
+                  <td style={{ ...tdStyle, fontSize:'0.7rem' }}>
+                    {lead.refer_url
+                      ? <a href={lead.refer_url} target="_blank" rel="noreferrer" style={{ color:'var(--primary)', fontSize:'0.7rem' }} title={lead.refer_url}>
+                          {lead.refer_url.replace(/^https?:\/\//, '').slice(0, 22)}…
+                        </a>
+                      : '—'}
+                  </td>
+                )}
                 <td style={{ ...tdStyle }} title={lead.remark || ''}>{fmt(lead.remark)}</td>
                 <td style={{ padding:'4px 6px' }}>
                   <div style={{ display:'flex', gap:3 }}>
