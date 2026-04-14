@@ -23,10 +23,11 @@ class Database
     public static function getConnection(): PDO
     {
         if (self::$instance === null) {
+            // Never fall back to hard-coded credentials; require the .env file.
             $host    = $_ENV['DB_HOST']    ?? 'localhost';
-            $db      = $_ENV['DB_NAME']    ?? 'a1679hju_leadpro';
-            $user    = $_ENV['DB_USER']    ?? 'a1679hju_leaduser';
-            $pass    = $_ENV['DB_PASS']    ?? 'ArjunEswar123';
+            $db      = $_ENV['DB_NAME']    ?? '';
+            $user    = $_ENV['DB_USER']    ?? '';
+            $pass    = $_ENV['DB_PASS']    ?? '';
             $charset = $_ENV['DB_CHARSET'] ?? 'utf8mb4';
 
             $dsn = "mysql:host={$host};dbname={$db};charset={$charset}";

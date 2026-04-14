@@ -24,7 +24,7 @@ $validRoles = ['Admin','Caller','Relationship Manager','Manager'];
 if (empty($name) || empty($email) || empty($password)) Response::error('Name, email, and password are required.');
 if (!filter_var($email, FILTER_VALIDATE_EMAIL))        Response::error('Invalid email address.');
 if (!in_array($role, $validRoles, true))               Response::error('Invalid role.');
-if (strlen($password) < 6)                             Response::error('Password must be at least 6 characters.');
+if (strlen($password) < 8)                             Response::error('Password must be at least 8 characters.');
 
 $pdo = Database::getConnection();
 
@@ -37,8 +37,17 @@ $stmt = $pdo->prepare(
     "INSERT INTO users (name, email, password_hash, role, is_active, created_at) VALUES (?, ?, ?, ?, 1, NOW())"
 );
 $stmt->execute([$name, $email, $hash, $role]);
-$newId = $pdo->lastInsertId();
+$newId = (int)$pdo->lastInsertId();
+
+// Generate email verification token for new account
+$verifyToken = Auth::generateVerificationToken($pdo, $newId);
+
+// TODO: Email the $verifyToken to $email via your SMTP setup.
+// During development the token is logged for convenience.
+$appUrl = rtrim($_ENV['APP_URL'] ?? 'http://localhost', '/');
+error_log("[Lead8X] Verify email for {$email} → {$appUrl}/verify-email?token={$verifyToken}");
 
 Auth::logActivity($pdo, (int)$user['id'], $user['name'], 'Create User', "Created user: {$name} ({$role})");
 
-Response::success('User created successfully.', ['user_id' => $newId], 201);
+Response::success('User created successfully. A verification email has been sent.', ['user_id' => $newId], 201);
+

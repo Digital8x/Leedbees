@@ -12,20 +12,38 @@ use Firebase\JWT\Key;
 
 class Auth
 {
-    private static string $secret;
-    private static int $expiry;
+    /** Maximum failed login attempts before an account is locked. */
+    private const MAX_ATTEMPTS   = 5;
 
+    /** Lockout duration in seconds once the threshold is exceeded. */
+    private const LOCKOUT_SECONDS = 900; // 15 minutes
+
+    private static string $secret;
+    private static int    $expiry;
+
+    // -----------------------------------------------------------------------
+    // Internal bootstrap
+    // -----------------------------------------------------------------------
     private static function init(): void
     {
-        self::$secret = $_ENV['JWT_SECRET'] ?? 'Lead8X_Default_Secret_Change_Me';
-        self::$expiry = (int)($_ENV['JWT_EXPIRY'] ?? 28800);
+        // Never fall back to a hard-coded secret; fail loudly instead.
+        $secret = $_ENV['JWT_SECRET'] ?? '';
+        if ($secret === '') {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Server misconfiguration: JWT_SECRET is not set.']);
+            exit;
+        }
+        self::$secret = $secret;
+        self::$expiry = (int)($_ENV['JWT_EXPIRY'] ?? 28800); // 8 hours default
     }
 
-    // --- Generate JWT token ---
+    // -----------------------------------------------------------------------
+    // JWT – Generate token
+    // -----------------------------------------------------------------------
     public static function generateToken(array $payload): string
     {
         self::init();
-        $now = time();
+        $now  = time();
         $data = array_merge($payload, [
             'iat' => $now,
             'exp' => $now + self::$expiry,
@@ -33,25 +51,28 @@ class Auth
         return JWT::encode($data, self::$secret, 'HS256');
     }
 
-    // --- Decode & validate JWT ---
+    // -----------------------------------------------------------------------
+    // JWT – Decode & validate token
+    // -----------------------------------------------------------------------
     public static function decodeToken(string $token): ?array
     {
         self::init();
         try {
             $decoded = JWT::decode($token, new Key(self::$secret, 'HS256'));
             return (array) $decoded;
-        } catch (\Throwable $e) {
+        } catch (\Throwable) {
             return null;
         }
     }
 
-    // --- Extract token from Authorization header ---
+    // -----------------------------------------------------------------------
+    // JWT – Extract Bearer token from Authorization header
+    // -----------------------------------------------------------------------
     public static function getBearerToken(): ?string
     {
         $auth = $_SERVER['HTTP_AUTHORIZATION']
             ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
-            ?? apache_request_headers()['Authorization']
-            ?? null;
+            ?? (@apache_request_headers()['Authorization'] ?? null);
 
         if ($auth && preg_match('/Bearer\s+(.*)$/i', $auth, $matches)) {
             return $matches[1];
@@ -59,7 +80,9 @@ class Auth
         return null;
     }
 
-    // --- Require valid JWT → return payload or die ---
+    // -----------------------------------------------------------------------
+    // JWT – Require valid token; optionally enforce roles
+    // -----------------------------------------------------------------------
     public static function requireAuth(array $allowedRoles = []): array
     {
         $token = self::getBearerToken();
@@ -79,25 +102,117 @@ class Auth
         return $payload;
     }
 
-    // --- Hash password ---
+    // -----------------------------------------------------------------------
+    // Password – Hash (Argon2id, upgraded from bcrypt)
+    // -----------------------------------------------------------------------
     public static function hashPassword(string $plain): string
     {
-        return password_hash($plain, PASSWORD_BCRYPT, ['cost' => 12]);
+        return password_hash($plain, PASSWORD_ARGON2ID);
     }
 
-    // --- Verify password ---
+    // -----------------------------------------------------------------------
+    // Password – Verify (works with both legacy bcrypt and new argon2id)
+    // -----------------------------------------------------------------------
     public static function verifyPassword(string $plain, string $hash): bool
     {
         return password_verify($plain, $hash);
     }
 
-    // --- Log activity ---
-    public static function logActivity(PDO $pdo, ?int $userId, ?string $userName, string $action, string $description = ''): void
+    // -----------------------------------------------------------------------
+    // Password – Check if an existing hash should be rehashed to argon2id
+    // -----------------------------------------------------------------------
+    public static function needsRehash(string $hash): bool
     {
-        $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+        return password_needs_rehash($hash, PASSWORD_ARGON2ID);
+    }
+
+    // -----------------------------------------------------------------------
+    // Rate limiting – Check if an account is currently locked out
+    // Returns null if not locked, or a human-readable message if locked.
+    // -----------------------------------------------------------------------
+    public static function checkRateLimit(PDO $pdo, string $email): ?string
+    {
         $stmt = $pdo->prepare(
-            "INSERT INTO activity_log (user_id, user_name, action, description, ip_address)
-             VALUES (?, ?, ?, ?, ?)"
+            'SELECT login_attempts, lockout_until FROM users WHERE email = ? LIMIT 1'
+        );
+        $stmt->execute([$email]);
+        $row = $stmt->fetch();
+
+        if (!$row) {
+            return null; // Unknown email – handled later as bad credentials
+        }
+
+        // Still within lockout window?
+        if ($row['lockout_until'] !== null && strtotime($row['lockout_until']) > time()) {
+            $remaining = (int)ceil((strtotime($row['lockout_until']) - time()) / 60);
+            return "Account temporarily locked. Try again in {$remaining} minute(s).";
+        }
+
+        return null;
+    }
+
+    // -----------------------------------------------------------------------
+    // Rate limiting – Record a failed login attempt
+    // -----------------------------------------------------------------------
+    public static function recordFailedAttempt(PDO $pdo, string $email): void
+    {
+        $pdo->prepare(
+            'UPDATE users
+                SET login_attempts = login_attempts + 1,
+                    lockout_until  = IF(login_attempts + 1 >= ?, DATE_ADD(NOW(), INTERVAL ? SECOND), lockout_until)
+              WHERE email = ?'
+        )->execute([self::MAX_ATTEMPTS, self::LOCKOUT_SECONDS, $email]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Rate limiting – Reset on successful login
+    // -----------------------------------------------------------------------
+    public static function resetLoginAttempts(PDO $pdo, string $email): void
+    {
+        $pdo->prepare(
+            'UPDATE users SET login_attempts = 0, lockout_until = NULL WHERE email = ?'
+        )->execute([$email]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Email verification – Generate a secure token and store it
+    // -----------------------------------------------------------------------
+    public static function generateVerificationToken(PDO $pdo, int $userId): string
+    {
+        $token = bin2hex(random_bytes(32)); // 64-char hex string
+        $pdo->prepare(
+            'UPDATE users SET email_verification_token = ? WHERE id = ?'
+        )->execute([$token, $userId]);
+        return $token;
+    }
+
+    // -----------------------------------------------------------------------
+    // Password reset – Generate a short-lived token and store it
+    // -----------------------------------------------------------------------
+    public static function generateResetToken(PDO $pdo, int $userId): string
+    {
+        $token   = bin2hex(random_bytes(32));
+        $expires = date('Y-m-d H:i:s', time() + 3600); // 1 hour
+        $pdo->prepare(
+            'UPDATE users SET reset_token = ?, reset_token_expires_at = ? WHERE id = ?'
+        )->execute([$token, $expires, $userId]);
+        return $token;
+    }
+
+    // -----------------------------------------------------------------------
+    // Activity logging
+    // -----------------------------------------------------------------------
+    public static function logActivity(
+        PDO     $pdo,
+        ?int    $userId,
+        ?string $userName,
+        string  $action,
+        string  $description = ''
+    ): void {
+        $ip   = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+        $stmt = $pdo->prepare(
+            'INSERT INTO activity_log (user_id, user_name, action, description, ip_address)
+             VALUES (?, ?, ?, ?, ?)'
         );
         $stmt->execute([$userId, $userName, $action, $description, $ip]);
     }
