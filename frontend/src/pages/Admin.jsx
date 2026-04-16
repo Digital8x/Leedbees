@@ -78,21 +78,6 @@ export default function Admin() {
           </div>
         )}
 
-        {/* Quick Actions */}
-        <div className="card mb-6">
-          <div className="section-title"><Shield size={17} color="var(--accent)"/> Quick Actions</div>
-          <div className="flex gap-3 flex-wrap mt-2">
-            <button className="btn btn-success" onClick={handleBackup} disabled={backing}>
-              <Download size={15}/> Full Backup (ZIP)
-            </button>
-            <a href="/setup?token=L3adBees_Setup_T0k3n_2024" target="_blank" className="btn btn-secondary">
-              ⚙️ Setup Script
-            </a>
-          </div>
-          <div className="alert alert-warning mt-4">
-            <strong>⚠️ After first setup:</strong> Set <code>SETUP_ENABLED=false</code> in .env to disable the setup script.
-          </div>
-        </div>
 
         {/* Activity Log */}
         <div className="card">

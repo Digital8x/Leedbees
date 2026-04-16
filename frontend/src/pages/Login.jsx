@@ -60,7 +60,7 @@ export default function Login() {
                 id="login-email"
                 className="form-input"
                 type="email"
-                placeholder="admin@digital8x.site"
+                placeholder=""
                 value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 autoFocus
