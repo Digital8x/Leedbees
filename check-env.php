@@ -32,6 +32,26 @@ foreach ($vars as $var) {
     }
 }
 
+echo "\n--- Database Connection Test ---\n";
+try {
+    require_once __DIR__ . '/backend/config/database.php';
+    $pdo = Database::getConnection();
+    echo "✅ Database connection SUCCESSFUL.\n";
+    
+    echo "\n--- RateLimiter Functional Test ---\n";
+    require_once __DIR__ . '/backend/core/RateLimiter.php';
+    $testIp = '1.2.3.4';
+    $rl = RateLimiter::check($pdo, $testIp, 'test_diagnostic', 100, 60);
+    if ($rl['allowed']) {
+        echo "✅ RateLimiter logic is WORKING correctly.\n";
+    } else {
+        echo "⚠️  RateLimiter blocked the diagnostic check (unexpected).\n";
+    }
+} catch (\Throwable $e) {
+    echo "❌ FUNCTIONAL TEST FAILED: " . $e->getMessage() . "\n";
+    echo "File: " . $e->getFile() . " Line: " . $e->getLine() . "\n";
+}
+
 echo "\n--- PHP Superglobals ---\n";
 echo "REMOTE_ADDR: " . ($_SERVER['REMOTE_ADDR'] ?? 'not set') . "\n";
 echo "HTTPS: " . ($_SERVER['HTTPS'] ?? 'off') . "\n";
