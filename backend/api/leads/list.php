@@ -104,6 +104,9 @@ $sql = "
     ) la ON la.lead_id = l.id
     {$where}
     ORDER BY {$sortBy} {$sortDir}
+    LIMIT ? OFFSET ?
+";
+
 $stmt = $pdo->prepare($sql);
 // Bind all where values
 foreach ($bindings as $i => $v) {
