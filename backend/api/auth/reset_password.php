@@ -8,6 +8,8 @@ require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__, 2) . '/utils/Response.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 
+require_once dirname(__DIR__, 2) . '/utils/Validator.php';
+
 Response::setCorsHeaders();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -15,15 +17,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $body        = json_decode(file_get_contents('php://input'), true);
-$token       = trim($body['token']        ?? '');
-$newPassword = trim($body['new_password'] ?? '');
+$token       = Validator::sanitizeString($body['token'] ?? null, 128);
+$newPassword = trim((string)($body['new_password'] ?? ''));
 
 if (empty($token) || strlen($token) !== 64) {
     Response::error('Invalid reset token.', 400);
 }
 
 if (strlen($newPassword) < 8) {
-    Response::error('Password must be at least 8 characters.', 400);
+    Response::error('New password must be at least 8 characters long.', 400);
 }
 
 $pdo = Database::getConnection();

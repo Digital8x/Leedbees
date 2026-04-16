@@ -9,6 +9,8 @@ require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__, 2) . '/utils/Response.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 
+require_once dirname(__DIR__, 2) . '/utils/Validator.php';
+
 Response::setCorsHeaders();
 
 $user = Auth::requireAuth(['Admin', 'Manager']);
@@ -18,9 +20,9 @@ if (!in_array($_SERVER['REQUEST_METHOD'], ['DELETE', 'POST'], true)) {
 }
 
 $body    = json_decode(file_get_contents('php://input'), true);
-$mode    = trim($body['mode'] ?? 'single');  // single | bulk | project | purge | purge_all
-$ids     = $body['ids']     ?? [];
-$project = trim($body['project'] ?? '');
+$mode    = Validator::sanitizeString($body['mode'] ?? 'single', 20);
+$ids     = array_filter(array_map('intval', (array)($body['ids'] ?? [])), fn($id) => $id > 0);
+$project = Validator::sanitizeString($body['project'] ?? null, 100) ?: '';
 
 $pdo = Database::getConnection();
 

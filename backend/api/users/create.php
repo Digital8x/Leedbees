@@ -8,6 +8,7 @@ require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__, 2) . '/utils/Response.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/RateLimiter.php';
+require_once dirname(__DIR__, 2) . '/utils/Validator.php';
 
 Response::setCorsHeaders();
 
@@ -26,14 +27,16 @@ $user = Auth::requireAuth(['Admin']);
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') Response::error('Method not allowed', 405);
 
 $body     = json_decode(file_get_contents('php://input'), true);
-$name     = trim($body['name']     ?? '');
-$email    = trim($body['email']    ?? '');
-$password = trim($body['password'] ?? '');
-$role     = trim($body['role']     ?? 'Caller');
+$name     = Validator::sanitizeString($body['name'] ?? null, 100);
+$email    = Validator::sanitizeEmail($body['email'] ?? null);
+$role     = Validator::sanitizeString($body['role'] ?? null, 30);
+$password = trim((string)($body['password'] ?? ''));
 
 $validRoles = ['Admin','Caller','Relationship Manager','Manager'];
 
-if (empty($name) || empty($email) || empty($password)) Response::error('Name, email, and password are required.');
+if (empty($name) || !$email || empty($role) || empty($password)) {
+    Response::error('Name, valid Email, Role, and Password are required.');
+}
 if (!filter_var($email, FILTER_VALIDATE_EMAIL))        Response::error('Invalid email address.');
 if (!in_array($role, $validRoles, true))               Response::error('Invalid role.');
 if (strlen($password) < 8)                             Response::error('Password must be at least 8 characters.');

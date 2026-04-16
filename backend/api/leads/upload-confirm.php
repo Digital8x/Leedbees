@@ -9,6 +9,7 @@ require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__, 2) . '/utils/Response.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/DuplicateDetector.php';
+require_once dirname(__DIR__, 2) . '/utils/Validator.php';
 
 Response::setCorsHeaders();
 
@@ -18,10 +19,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     Response::error('Method not allowed', 405);
 }
 
-$body       = json_decode(file_get_contents('php://input'), true);
-$parseId    = trim($body['parse_id'] ?? '');
-$projectName = trim($body['project_name'] ?? '');
-$referUrl   = trim($body['refer_url'] ?? '');
+$body = json_decode(file_get_contents('php://input'), true);
+if (!is_array($body)) {
+    Response::error('Invalid JSON request body.', 400);
+}
+
+$parseId     = Validator::sanitizeString($body['parse_id'] ?? null, 128);
+$projectName = Validator::sanitizeString($body['project_name'] ?? null, 100);
+$referUrl    = Validator::sanitizeUrl($body['refer_url'] ?? null);
 
 if (empty($parseId)) {
     Response::error('parse_id is required.');

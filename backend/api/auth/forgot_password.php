@@ -8,6 +8,7 @@ require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__, 2) . '/utils/Response.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/RateLimiter.php';
+require_once dirname(__DIR__, 2) . '/utils/Validator.php';
 
 Response::setCorsHeaders();
 
@@ -26,13 +27,11 @@ if (!$rateLimit['allowed']) {
 }
 
 $body  = json_decode(file_get_contents('php://input'), true);
-$email = trim($body['email'] ?? '');
+$email = Validator::sanitizeEmail($body['email'] ?? null);
 
-if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    Response::error('A valid email address is required.');
+if (!$email) {
+    Response::error('Valid email address is required.');
 }
-
-$pdo = Database::getConnection();
 
 $stmt = $pdo->prepare('SELECT id, name FROM users WHERE email = ? AND is_active = 1 LIMIT 1');
 $stmt->execute([$email]);

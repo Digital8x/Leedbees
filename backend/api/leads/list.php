@@ -6,7 +6,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__, 3) . '/vendor/autoload.php';
 require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__, 2) . '/utils/Response.php';
-require_once dirname(__DIR__, 2) . '/core/Auth.php';
+require_once dirname(__DIR__, 2) . '/utils/Validator.php';
 
 Response::setCorsHeaders();
 
@@ -19,19 +19,21 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 $pdo = Database::getConnection();
 
 // --- Query Params ---
-$page        = max(1, (int)($_GET['page'] ?? 1));
-$limit       = min(1000, max(10, (int)($_GET['limit'] ?? 50)));
+$page        = max(1, Validator::asInt($_GET['page'] ?? 1, 1));
+$limit       = Validator::asInt($_GET['limit'] ?? 50, 50);
+$limit       = min(1000, max(10, $limit));
 $offset      = ($page - 1) * $limit;
-$search      = trim($_GET['search']     ?? '');
-$status      = trim($_GET['status']     ?? '');
-$batchId     = trim($_GET['batch_id']   ?? '');
+$search      = Validator::sanitizeString($_GET['search'] ?? null);
+$status      = Validator::sanitizeString($_GET['status'] ?? null);
+$batchId     = Validator::sanitizeString($_GET['batch_id'] ?? null);
 $isDup       = isset($_GET['is_duplicate']) ? (int)$_GET['is_duplicate'] : null;
 $isNri       = isset($_GET['is_nri'])       ? (int)$_GET['is_nri']       : null;
-$assignee    = trim($_GET['assigned_to']    ?? '');
-$project     = trim($_GET['project']        ?? '');
-$device      = trim($_GET['device']         ?? '');
-$dateFrom    = trim($_GET['date_from']      ?? '');
-$dateTo      = trim($_GET['date_to']        ?? '');
+$assignee    = Validator::asInt($_GET['assigned_to'] ?? null, -1);
+if ($assignee === -1) $assignee = null;
+$project     = Validator::sanitizeString($_GET['project'] ?? null);
+$device      = Validator::sanitizeString($_GET['device'] ?? null);
+$dateFrom    = Validator::sanitizeString($_GET['date_from'] ?? null);
+$dateTo      = Validator::sanitizeString($_GET['date_to'] ?? null);
 $showDeleted = ($_GET['show_deleted'] ?? '') === '1';
 
 // Sort
@@ -70,7 +72,7 @@ if ($status !== '') { $where .= ' AND l.status = ?'; $bindings[] = $status; }
 if ($batchId !== '') { $where .= ' AND l.first_batch_id = ?'; $bindings[] = $batchId; }
 if ($isDup !== null) { $where .= ' AND l.is_duplicate = ?'; $bindings[] = $isDup; }
 if ($isNri !== null) { $where .= ' AND l.is_nri = ?'; $bindings[] = $isNri; }
-if ($assignee !== '') { $where .= ' AND l.assigned_to = ?'; $bindings[] = $assignee; }
+if ($assignee !== null) { $where .= ' AND l.assigned_to = ?'; $bindings[] = $assignee; }
 if ($project !== '') { $where .= ' AND l.project = ?'; $bindings[] = $project; }
 if ($device !== '') { $where .= ' AND l.device LIKE ?'; $bindings[] = "%{$device}%"; }
 if ($dateFrom !== '') { $where .= ' AND DATE(l.created_at) >= ?'; $bindings[] = $dateFrom; }

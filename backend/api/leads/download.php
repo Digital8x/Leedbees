@@ -39,8 +39,8 @@ if (in_array($user['role'], ['Caller', 'Relationship Manager'], true)) {
     $bindings[] = $user['id'];
 }
 
-// Selection-wise (comma-separated IDs)
-$exportIds = trim($_GET['export_ids'] ?? '');
+// selection-wise (comma-separated IDs)
+$exportIds = Validator::sanitizeString($_GET['export_ids'] ?? null);
 if ($exportIds !== '') {
     $ids  = array_filter(array_map('intval', explode(',', $exportIds)), fn($id) => $id > 0);
     if (!empty($ids)) {
@@ -51,19 +51,24 @@ if ($exportIds !== '') {
 }
 
 // Project filter
-$project = trim($_GET['project'] ?? '');
+$project = Validator::sanitizeString($_GET['project'] ?? null);
 if ($project) { $where .= ' AND l.project = ?'; $bindings[] = $project; }
 
 // Status filter
-$status = trim($_GET['status'] ?? '');
+$status = Validator::sanitizeString($_GET['status'] ?? null);
 if ($status) { $where .= ' AND l.status = ?'; $bindings[] = $status; }
 
 // Batch filter
-$batchId = trim($_GET['batch_id'] ?? '');
+$batchId = Validator::sanitizeString($_GET['batch_id'] ?? null);
 if ($batchId) { $where .= ' AND l.first_batch_id = ?'; $bindings[] = $batchId; }
 
 // NRI filter
-if (isset($_GET['is_nri'])) { $where .= ' AND l.is_nri = ?'; $bindings[] = (int)$_GET['is_nri']; }
+$isNriRaw = $_GET['is_nri'] ?? null;
+if ($isNriRaw !== null) { 
+    $isNri = (int)Validator::sanitizeString($isNriRaw);
+    $where .= ' AND l.is_nri = ?'; 
+    $bindings[] = $isNri; 
+}
 
 $sql = "SELECT l.id, l.name, l.phone, l.email, l.project, l.status, l.country,
                l.ip_address, l.device, l.refer_url, l.remark, l.entry_id,

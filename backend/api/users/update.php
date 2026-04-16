@@ -7,6 +7,7 @@ require_once dirname(__DIR__, 3) . '/vendor/autoload.php';
 require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__, 2) . '/utils/Response.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
+require_once dirname(__DIR__, 2) . '/utils/Validator.php';
 
 Response::setCorsHeaders();
 $authUser = Auth::requireAuth(['Admin']);
@@ -14,10 +15,10 @@ $authUser = Auth::requireAuth(['Admin']);
 if ($_SERVER['REQUEST_METHOD'] !== 'PUT') Response::error('Method not allowed', 405);
 
 $body       = json_decode(file_get_contents('php://input'), true);
-$targetId   = (int)($body['id']       ?? 0);
-$name       = trim($body['name']      ?? '');
-$email      = trim($body['email']     ?? '');
-$role       = trim($body['role']      ?? '');
+$targetId   = Validator::asInt($body['id'] ?? null);
+$name       = Validator::sanitizeString($body['name'] ?? null, 100);
+$email      = Validator::sanitizeEmail($body['email'] ?? null);
+$role       = Validator::sanitizeString($body['role'] ?? null, 30);
 $password   = trim($body['password']  ?? '');
 $isActive   = isset($body['is_active']) ? (int)(bool)$body['is_active'] : null;
 $validRoles = ['Admin','Caller','Relationship Manager','Manager'];

@@ -9,6 +9,7 @@ require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__, 2) . '/utils/Response.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/ExcelHandler.php';
+require_once dirname(__DIR__, 2) . '/utils/Validator.php';
 
 Response::setCorsHeaders();
 
@@ -19,18 +20,25 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 if (empty($_FILES['file'])) {
-    Response::error('No file uploaded.');
+    Response::error('No file selected for upload.');
 }
 
-$file    = $_FILES['file'];
-$allowed = ['xlsx', 'xls', 'csv'];
-$ext     = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+$file = $_FILES['file'];
+$ext  = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
 
-if (!in_array($ext, $allowed, true)) {
-    Response::error('Only Excel (.xlsx, .xls) and CSV files are allowed.');
+// Strict Extension & MIME Mapping
+$mimeMap = [
+    'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+    'xls'  => ['application/vnd.ms-excel'],
+    'csv'  => ['text/csv', 'application/csv', 'text/plain', 'application/octet-stream']
+];
+
+if (!isset($mimeMap[$ext])) {
+    Response::error('Invalid file extension. Only .xlsx, .xls, and .csv are allowed.', 400);
 }
-if ($file['error'] !== UPLOAD_ERR_OK) {
-    Response::error('File upload error: ' . $file['error']);
+
+if (!Validator::isValidUpload($file, $mimeMap[$ext], 10485760)) {
+    Response::error('Invalid file content or size too large. Make sure you are uploading a real ' . strtoupper($ext) . ' file.', 400);
 }
 
 $tmpPath = sys_get_temp_dir() . '/lead8x_upload_' . uniqid() . '.' . $ext;

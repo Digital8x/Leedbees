@@ -101,7 +101,24 @@ class ExcelHandler
      */
     public static function parseUpload(string $filePath): array
     {
-        $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        // 1. Strict Mapping between Extension and Allowed MIME Types
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mime  = $finfo->file($filePath);
+        $ext   = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+
+        $map = [
+            'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+            'xls'  => ['application/vnd.ms-excel'],
+            'csv'  => ['text/csv', 'application/csv']
+        ];
+
+        if (!isset($map[$ext])) {
+            throw new \Exception("Unsupported file extension: .$ext. Only .xlsx, .xls, and .csv are allowed.");
+        }
+
+        if (!in_array($mime, $map[$ext], true)) {
+            throw new \Exception("File content mismatch: The extension .$ext does not match the detected MIME type ($mime).");
+        }
 
         if ($ext === 'csv') {
             return self::parseCsv($filePath);

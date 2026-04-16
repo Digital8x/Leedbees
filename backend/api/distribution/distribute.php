@@ -8,6 +8,7 @@ require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__, 2) . '/utils/Response.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/DuplicateDetector.php';
+require_once dirname(__DIR__, 2) . '/utils/Validator.php';
 
 Response::setCorsHeaders();
 
@@ -17,14 +18,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     Response::error('Method not allowed', 405);
 }
 
-$body = json_decode(file_get_contents('php://input'), true);
-$type     = trim($body['type'] ?? 'equal');   // 'equal' | 'manual'
-$batchId  = trim($body['batch_id'] ?? '');
-$leadIds  = $body['lead_ids'] ?? [];           // for manual
-$userIds  = $body['user_ids'] ?? [];           // callers to assign to
+$body    = json_decode(file_get_contents('php://input'), true);
+$type    = Validator::sanitizeString($body['type'] ?? 'equal', 20);
+$batchId = Validator::sanitizeString($body['batch_id'] ?? null, 100);
+$leadIds = array_filter(array_map('intval', (array)($body['lead_ids'] ?? [])), fn($id) => $id > 0);
+$userIds = array_filter(array_map('intval', (array)($body['user_ids'] ?? [])), fn($id) => $id > 0);
 
 if (empty($userIds)) {
-    Response::error('At least one user (caller) must be selected.');
+    Response::error('At least one active user must be selected for distribution.');
 }
 
 $pdo = Database::getConnection();

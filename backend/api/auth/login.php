@@ -8,6 +8,7 @@ require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__, 2) . '/utils/Response.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
 require_once dirname(__DIR__, 2) . '/core/RateLimiter.php';
+require_once dirname(__DIR__, 2) . '/utils/Validator.php';
 
 Response::setCorsHeaders();
 
@@ -16,11 +17,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $body     = json_decode(file_get_contents('php://input'), true);
-$email    = trim($body['email']    ?? '');
-$password = trim($body['password'] ?? '');
+$email    = Validator::sanitizeEmail($body['email'] ?? null);
+$password = trim((string)($body['password'] ?? ''));
 
-if (empty($email) || empty($password)) {
-    Response::error('Email and password are required.');
+if (!$email || empty($password)) {
+    Response::error('Valid email and password are required.');
 }
 
 $pdo = Database::getConnection();
