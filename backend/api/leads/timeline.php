@@ -22,10 +22,16 @@ if (!$leadId) Response::error('lead_id is required.');
 $pdo = Database::getConnection();
 
 // Verify lead exists
-$lead = $pdo->prepare("SELECT id, phone, name FROM leads WHERE id = ? LIMIT 1");
+$lead = $pdo->prepare("SELECT id, phone, name, assigned_to FROM leads WHERE id = ? LIMIT 1");
 $lead->execute([$leadId]);
 $leadData = $lead->fetch();
 if (!$leadData) Response::notFound('Lead not found.');
+
+if (in_array($user['role'], ['Caller', 'Relationship Manager'], true)) {
+    if ($leadData['assigned_to'] != $user['id']) {
+        Response::error('Access denied to this lead.', 403);
+    }
+}
 
 // Get timeline events
 $stmt = $pdo->prepare(

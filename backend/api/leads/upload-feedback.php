@@ -97,7 +97,13 @@ try {
         if (empty($setParts)) continue;
 
         $params[] = $row['id'];
-        $stmt = $pdo->prepare("UPDATE leads SET " . implode(', ', $setParts) . " WHERE id = ?");
+        $where = "WHERE id = ?";
+        if (in_array($user['role'], ['Caller', 'Relationship Manager'], true)) {
+            $where .= " AND assigned_to = ?";
+            $params[] = $user['id'];
+        }
+
+        $stmt = $pdo->prepare("UPDATE leads SET " . implode(', ', $setParts) . " " . $where);
         $stmt->execute($params);
 
         if ($stmt->rowCount() > 0) {

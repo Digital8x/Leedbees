@@ -50,10 +50,16 @@ if (!empty($_FILES['file'])) {
                 $stats['invalid_status']++; continue;
             }
 
-            $stmt = $pdo->prepare("SELECT id, status FROM leads WHERE phone = ? LIMIT 1");
+            $stmt = $pdo->prepare("SELECT id, status, assigned_to FROM leads WHERE phone = ? LIMIT 1");
             $stmt->execute([$phone]);
             $lead = $stmt->fetch();
             if (!$lead) { $stats['not_found']++; continue; }
+
+            if (in_array($user['role'], ['Caller', 'Relationship Manager'], true)) {
+                if ($lead['assigned_to'] != $user['id']) {
+                    $stats['not_found']++; continue;
+                }
+            }
 
             $oldStatus = $lead['status'];
             $updates = []; $vals = [];
@@ -88,16 +94,22 @@ $assignedTo = isset($body['assigned_to']) ? ($body['assigned_to'] === '' || $bod
 
 // Look up lead
 if ($leadId > 0) {
-    $stmt = $pdo->prepare("SELECT id, status FROM leads WHERE id = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, status, assigned_to FROM leads WHERE id = ? LIMIT 1");
     $stmt->execute([$leadId]);
 } else {
     $phone = DuplicateDetector::normalizePhone($body['phone'] ?? '');
     if (empty($phone)) Response::error('lead_id or phone is required.');
-    $stmt = $pdo->prepare("SELECT id, status FROM leads WHERE phone = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, status, assigned_to FROM leads WHERE phone = ? LIMIT 1");
     $stmt->execute([$phone]);
 }
 $lead = $stmt->fetch();
 if (!$lead) Response::notFound('Lead not found.');
+
+if (in_array($user['role'], ['Caller', 'Relationship Manager'], true)) {
+    if ($lead['assigned_to'] != $user['id']) {
+        Response::error('Access denied to this lead.', 403);
+    }
+}
 
 $oldStatus = $lead['status'];
 $updates   = [];
