@@ -47,9 +47,23 @@ try {
     } else {
         echo "⚠️  RateLimiter blocked the diagnostic check (unexpected).\n";
     }
+
+    echo "\n--- Auth & JWT Library Test ---\n";
+    require_once __DIR__ . '/backend/core/Auth.php';
+    $testToken = Auth::generateToken(['test' => true]);
+    if ($testToken) {
+        echo "✅ JWT Generation is WORKING.\n";
+        $decoded = Auth::decodeToken($testToken);
+        if ($decoded && $decoded['test'] === true) {
+            echo "✅ JWT Decoding is WORKING.\n";
+        } else {
+            echo "❌ JWT Decoding FAILED.\n";
+        }
+    }
 } catch (\Throwable $e) {
     echo "❌ FUNCTIONAL TEST FAILED: " . $e->getMessage() . "\n";
     echo "File: " . $e->getFile() . " Line: " . $e->getLine() . "\n";
+    echo "Stack Trace: " . $e->getTraceAsString() . "\n";
 }
 
 echo "\n--- PHP Superglobals ---\n";
