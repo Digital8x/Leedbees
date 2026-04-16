@@ -19,68 +19,79 @@ class RateLimiter
      */
     public static function check(PDO $pdo, string $identifier, string $endpoint, int $limit, int $windowSec): array
     {
-        $now = date('Y-m-d H:i:s');
-        
-        // 1. Cleanup expired entries occasionally (10% chance per request)
-        if (rand(1, 100) <= 10) {
-            $pdo->prepare("DELETE FROM rate_limits WHERE reset_at < ?")->execute([$now]);
-        }
+        try {
+            $now = date('Y-m-d H:i:s');
+            
+            // 1. Cleanup expired entries occasionally (10% chance per request)
+            if (rand(1, 100) <= 10) {
+                $pdo->prepare("DELETE FROM rate_limits WHERE reset_at < ?")->execute([$now]);
+            }
 
-        // 2. Look up current entry
-        $stmt = $pdo->prepare(
-            "SELECT hits, reset_at FROM rate_limits WHERE identifier = ? AND endpoint = ? LIMIT 1"
-        );
-        $stmt->execute([$identifier, $endpoint]);
-        $row = $stmt->fetch();
-
-        if (!$row) {
-            // First hit: Initialize
-            $resetAt = date('Y-m-d H:i:s', time() + $windowSec);
+            // 2. Look up current entry
             $stmt = $pdo->prepare(
-                "INSERT INTO rate_limits (identifier, endpoint, hits, reset_at) VALUES (?, ?, 1, ?)"
+                "SELECT hits, reset_at FROM rate_limits WHERE identifier = ? AND endpoint = ? LIMIT 1"
             );
-            $stmt->execute([$identifier, $endpoint, $resetAt]);
+            $stmt->execute([$identifier, $endpoint]);
+            $row = $stmt->fetch();
+
+            if (!$row) {
+                // First hit: Initialize
+                $resetAt = date('Y-m-d H:i:s', time() + $windowSec);
+                $stmt = $pdo->prepare(
+                    "INSERT INTO rate_limits (identifier, endpoint, hits, reset_at) VALUES (?, ?, 1, ?)"
+                );
+                $stmt->execute([$identifier, $endpoint, $resetAt]);
+                
+                return [
+                    'allowed'   => true,
+                    'hits'      => 1,
+                    'reset_at'  => $resetAt,
+                    'remaining' => $limit - 1
+                ];
+            }
+
+            $hits    = (int)$row['hits'];
+            $resetAt = $row['reset_at'];
+
+            // If reset time has passed, start fresh
+            if (strtotime($resetAt) <= time()) {
+                $newReset = date('Y-m-d H:i:s', time() + $windowSec);
+                $pdo->prepare(
+                    "UPDATE rate_limits SET hits = 1, reset_at = ?, updated_at = NOW() WHERE identifier = ? AND endpoint = ?"
+                )->execute([$newReset, $identifier, $endpoint]);
+
+                return [
+                    'allowed'   => true,
+                    'hits'      => 1,
+                    'reset_at'  => $newReset,
+                    'remaining' => $limit - 1
+                ];
+            }
+
+            // Within window: Increment
+            $hits++;
+            $pdo->prepare(
+                "UPDATE rate_limits SET hits = hits + 1, updated_at = NOW() WHERE identifier = ? AND endpoint = ?"
+            )->execute([$identifier, $endpoint]);
+
+            $allowed = $hits <= $limit;
             
             return [
-                'allowed'   => true,
-                'hits'      => 1,
+                'allowed'   => $allowed,
+                'hits'      => $hits,
                 'reset_at'  => $resetAt,
-                'remaining' => $limit - 1
+                'remaining' => max(0, $limit - $hits)
             ];
-        }
-
-        $hits    = (int)$row['hits'];
-        $resetAt = $row['reset_at'];
-
-        // If reset time has passed, start fresh
-        if (strtotime($resetAt) <= time()) {
-            $newReset = date('Y-m-d H:i:s', time() + $windowSec);
-            $pdo->prepare(
-                "UPDATE rate_limits SET hits = 1, reset_at = ?, updated_at = NOW() WHERE identifier = ? AND endpoint = ?"
-            )->execute([$newReset, $identifier, $endpoint]);
-
+        } catch (\Throwable $e) {
+            // If table doesn't exist yet or DB error, fail OPEN so user isn't blocked
+            error_log("RateLimiter Error: " . $e->getMessage());
             return [
-                'allowed'   => true,
-                'hits'      => 1,
-                'reset_at'  => $newReset,
-                'remaining' => $limit - 1
+                'allowed'   => true, 
+                'hits'      => 0, 
+                'reset_at'  => date('Y-m-d H:i:s'), 
+                'remaining' => $limit
             ];
         }
-
-        // Within window: Increment
-        $hits++;
-        $pdo->prepare(
-            "UPDATE rate_limits SET hits = hits + 1, updated_at = NOW() WHERE identifier = ? AND endpoint = ?"
-        )->execute([$identifier, $endpoint]);
-
-        $allowed = $hits <= $limit;
-        
-        return [
-            'allowed'   => $allowed,
-            'hits'      => $hits,
-            'reset_at'  => $resetAt,
-            'remaining' => max(0, $limit - $hits)
-        ];
     }
 
     /**
