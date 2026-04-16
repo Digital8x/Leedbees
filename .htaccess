@@ -1,5 +1,8 @@
 RewriteEngine On
 
+# --- Pass Authorization header to PHP (shared hosting fix) ---
+RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
 # --- HTTPS Enforcement (Supports proxies/load balancers) ---
 RewriteCond %{HTTPS} off
 RewriteCond %{HTTP:X-Forwarded-Proto} !https
