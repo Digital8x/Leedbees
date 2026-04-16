@@ -209,12 +209,17 @@ class Auth
         string  $action,
         string  $description = ''
     ): void {
-        $ip   = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-        $stmt = $pdo->prepare(
-            'INSERT INTO activity_log (user_id, user_name, action, description, ip_address)
-             VALUES (?, ?, ?, ?, ?)'
-        );
-        $stmt->execute([$userId, $userName, $action, $description, $ip]);
+        try {
+            $ip   = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+            $stmt = $pdo->prepare(
+                'INSERT INTO activity_log (user_id, user_name, action, description, ip_address)
+                 VALUES (?, ?, ?, ?, ?)'
+            );
+            $stmt->execute([$userId, $userName, $action, $description, $ip]);
+        } catch (\Throwable $e) {
+            // Silently fail logging so it doesn't break the main user flow (login/access)
+            error_log("Activity Logging Failed: " . $e->getMessage());
+        }
     }
 
     /**
