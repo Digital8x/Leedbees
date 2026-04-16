@@ -124,7 +124,7 @@ class Validator
             return false;
         }
 
-        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
         $mime = $finfo->file($tmpPath);
 
         if ($mime === false) return false;

@@ -46,10 +46,15 @@ $roleFilter = '';
 $bindings   = [];
 
 $isCallerRole = in_array($user['role'], ['Caller', 'Relationship Manager'], true);
-if ($isCallerRole) {
+$isAssigneeFiltered = ($assignee !== null);
+
+if ($isCallerRole && !$isAssigneeFiltered) {
     $roleFilter  = ' AND l.assigned_to = ?';
     $bindings[]  = $user['id'];
-    // Callers cannot see Not Interested leads
+}
+
+// Callers cannot see Not Interested leads
+if ($isCallerRole) {
     $roleFilter .= " AND l.status != 'Not Interested'";
 }
 
@@ -99,13 +104,15 @@ $sql = "
     ) la ON la.lead_id = l.id
     {$where}
     ORDER BY {$sortBy} {$sortDir}
-    LIMIT ? OFFSET ?
-";
-$bindings[] = $limit;
-$bindings[] = $offset;
-
 $stmt = $pdo->prepare($sql);
-$stmt->execute($bindings);
+// Bind all where values
+foreach ($bindings as $i => $v) {
+    $stmt->bindValue($i + 1, $v);
+}
+// Explicitly bind limit and offset as integers
+$stmt->bindValue(count($bindings) + 1, (int)$limit, PDO::PARAM_INT);
+$stmt->bindValue(count($bindings) + 2, (int)$offset, PDO::PARAM_INT);
+$stmt->execute();
 $leads = $stmt->fetchAll();
 
 // Callers: strip project name
