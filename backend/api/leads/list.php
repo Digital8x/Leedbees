@@ -104,30 +104,27 @@ $sql = "
     ) la ON la.lead_id = l.id
     {$where}
     ORDER BY {$sortBy} {$sortDir}
-    LIMIT ? OFFSET ?
+    LIMIT {$limit} OFFSET {$offset}
 ";
 
-$stmt = $pdo->prepare($sql);
-// Bind all where values
-foreach ($bindings as $i => $v) {
-    $stmt->bindValue($i + 1, $v);
+try {
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($bindings);
+    $leads = $stmt->fetchAll();
+} catch (\PDOException $e) {
+    Response::error('Database error: ' . $e->getMessage(), 500);
 }
-// Explicitly bind limit and offset as integers
-$stmt->bindValue(count($bindings) + 1, (int)$limit, PDO::PARAM_INT);
-$stmt->bindValue(count($bindings) + 2, (int)$offset, PDO::PARAM_INT);
-$stmt->execute();
-$leads = $stmt->fetchAll();
 
 // Callers: strip project name
 if ($isCallerRole) {
     $leads = array_map(function($l) {
         unset($l['project']);
         return $l;
-    }, $leads);
+    }, (array)$leads);
 }
 
 Response::success('OK', [
-    'leads'       => $leads,
+    'leads'       => $leads ?: [],
     'total'       => $total,
     'page'        => $page,
     'limit'       => $limit,
