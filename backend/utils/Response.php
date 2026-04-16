@@ -28,6 +28,13 @@ class Response
     /** @return void */
     public static function error(string $message = 'Error', int $code = 400, mixed $data = null): void
     {
+        // Log security-related errors for traffic monitoring
+        if (in_array($code, [401, 403, 429], true)) {
+            $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+            $uri = $_SERVER['REQUEST_URI'] ?? 'unknown';
+            $method = $_SERVER['REQUEST_METHOD'] ?? 'unknown';
+            error_log("[Security] Code $code: $message | IP: $ip | URI: $method $uri");
+        }
         self::json(false, $message, $data, $code);
         exit;
     }
