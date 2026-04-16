@@ -15,6 +15,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     Response::error('Method not allowed', 405);
 }
 
+$body     = json_decode(file_get_contents('php://input'), true);
+$email    = trim($body['email']    ?? '');
+$password = trim($body['password'] ?? '');
+
+if (empty($email) || empty($password)) {
+    Response::error('Email and password are required.');
+}
+
 $pdo = Database::getConnection();
 
 // ── 0. IP-based Rate-limit (Abuse Protection) ──────────────────────────────
