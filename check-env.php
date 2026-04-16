@@ -66,7 +66,8 @@ try {
     echo "Stack Trace: " . $e->getTraceAsString() . "\n";
 }
 
-echo "\n--- PHP Superglobals ---\n";
+echo "\n--- PHP Environment ---\n";
+echo "PHP Version: " . PHP_VERSION . "\n";
 echo "REMOTE_ADDR: " . ($_SERVER['REMOTE_ADDR'] ?? 'not set') . "\n";
 echo "HTTPS: " . ($_SERVER['HTTPS'] ?? 'off') . "\n";
 echo "HTTP_X_FORWARDED_PROTO: " . ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? 'not set') . "\n";
