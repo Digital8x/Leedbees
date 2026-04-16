@@ -7,8 +7,20 @@ require_once dirname(__DIR__, 3) . '/vendor/autoload.php';
 require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__, 2) . '/utils/Response.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
+require_once dirname(__DIR__, 2) . '/core/RateLimiter.php';
 
 Response::setCorsHeaders();
+
+$pdo = Database::getConnection();
+
+// --- IP-based Rate limit (Abuse Protection) ---
+$ip = RateLimiter::getIp();
+$rateLimit = RateLimiter::check($pdo, $ip, 'user_creation', 20, 3600); // 20 per hour
+if (!$rateLimit['allowed']) {
+    $resetTime = date('H:i', strtotime($rateLimit['reset_at']));
+    Response::tooManyRequests("User creation quota exceeded for this IP. Try again after $resetTime.");
+}
+
 $user = Auth::requireAuth(['Admin']);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') Response::error('Method not allowed', 405);

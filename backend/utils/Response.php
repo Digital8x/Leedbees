@@ -62,6 +62,13 @@ class Response
         exit;
     }
 
+    /** @return void */
+    public static function tooManyRequests(string $message = 'Too many requests. Please try again later.'): void
+    {
+        self::error($message, 429);
+        exit;
+    }
+
     public static function setCorsHeaders(): void
     {
         header('Access-Control-Allow-Origin: *');

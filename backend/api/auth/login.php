@@ -7,6 +7,7 @@ require_once dirname(__DIR__, 3) . '/vendor/autoload.php';
 require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__, 2) . '/utils/Response.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
+require_once dirname(__DIR__, 2) . '/core/RateLimiter.php';
 
 Response::setCorsHeaders();
 
@@ -14,17 +15,17 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     Response::error('Method not allowed', 405);
 }
 
-$body     = json_decode(file_get_contents('php://input'), true);
-$email    = trim($body['email']    ?? '');
-$password = trim($body['password'] ?? '');
-
-if (empty($email) || empty($password)) {
-    Response::error('Email and password are required.');
-}
-
 $pdo = Database::getConnection();
 
-// ── 1. Rate-limit check ────────────────────────────────────────────────────
+// ── 0. IP-based Rate-limit (Abuse Protection) ──────────────────────────────
+$ip = RateLimiter::getIp();
+$rateLimit = RateLimiter::check($pdo, $ip, 'login', 10, 900); // 10 attempts per 15 mins
+if (!$rateLimit['allowed']) {
+    $resetTime = date('H:i', strtotime($rateLimit['reset_at']));
+    Response::tooManyRequests("Too many attempts from this IP. Please try again after $resetTime.");
+}
+
+// ── 1. Rate-limit check (Account-based) ────────────────────────────────────
 $lockMessage = Auth::checkRateLimit($pdo, $email);
 if ($lockMessage !== null) {
     $masked = Auth::maskEmail($email);

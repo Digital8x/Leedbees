@@ -7,11 +7,22 @@ require_once dirname(__DIR__, 3) . '/vendor/autoload.php';
 require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__, 2) . '/utils/Response.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
+require_once dirname(__DIR__, 2) . '/core/RateLimiter.php';
 
 Response::setCorsHeaders();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     Response::error('Method not allowed', 405);
+}
+
+$pdo = Database::getConnection();
+
+// --- IP-based Rate limit (Abuse Protection) ---
+$ip = RateLimiter::getIp();
+$rateLimit = RateLimiter::check($pdo, $ip, 'forgot_password', 5, 3600); // 5 attempts per hour
+if (!$rateLimit['allowed']) {
+    $resetTime = date('H:i', strtotime($rateLimit['reset_at']));
+    Response::tooManyRequests("Password reset quota exceeded for this IP. Try again after $resetTime.");
 }
 
 $body  = json_decode(file_get_contents('php://input'), true);

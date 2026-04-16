@@ -8,6 +8,7 @@ require_once dirname(__DIR__, 3) . '/vendor/autoload.php';
 require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__, 2) . '/utils/Response.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
+require_once dirname(__DIR__, 2) . '/core/RateLimiter.php';
 require_once dirname(__DIR__, 2) . '/core/ExcelHandler.php';
 require_once dirname(__DIR__, 2) . '/core/DuplicateDetector.php';
 
@@ -20,6 +21,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 }
 
 $pdo      = Database::getConnection();
+
+// --- IP-based Rate limit (Abuse Protection) ---
+$ip = RateLimiter::getIp();
+$rateLimit = RateLimiter::check($pdo, $ip, 'lead_export', 5, 60); // 5 exports per minute
+if (!$rateLimit['allowed']) {
+    $resetTime = date('i:s', strtotime($rateLimit['reset_at']));
+    Response::tooManyRequests("Export quota exceeded. Please wait a moment before trying again.");
+}
+
 $where    = "WHERE l.deleted_at IS NULL";
 $bindings = [];
 
