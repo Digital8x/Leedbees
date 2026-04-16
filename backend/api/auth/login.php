@@ -27,7 +27,8 @@ $pdo = Database::getConnection();
 // ── 1. Rate-limit check ────────────────────────────────────────────────────
 $lockMessage = Auth::checkRateLimit($pdo, $email);
 if ($lockMessage !== null) {
-    Auth::logActivity($pdo, null, 'unknown', 'Rate Limit Hit', "IP: {$_SERVER['REMOTE_ADDR']} hit rate limit for {$email}: {$lockMessage}");
+    $masked = Auth::maskEmail($email);
+    Auth::logActivity($pdo, null, 'unknown', 'Rate Limit Hit', "IP: {$_SERVER['REMOTE_ADDR']} hit rate limit for {$masked}: {$lockMessage}");
     Response::error($lockMessage, 429);
 }
 
@@ -44,9 +45,11 @@ if (!$user || !Auth::verifyPassword($password, $user['password_hash'])) {
     // Record the failure (operates safely even if $user is false)
     if ($user) {
         Auth::recordFailedAttempt($pdo, $email);
-        Auth::logActivity($pdo, (int)$user['id'], $user['name'], 'Login Failed', "Incorrect password for {$email} from {$_SERVER['REMOTE_ADDR']}");
+        $masked = Auth::maskEmail($email);
+        Auth::logActivity($pdo, (int)$user['id'], $user['name'], 'Login Failed', "Incorrect password for {$masked} from {$_SERVER['REMOTE_ADDR']}");
     } else {
-        Auth::logActivity($pdo, null, 'unknown', 'Login Failed', "Attempt with non-existent email {$email} from {$_SERVER['REMOTE_ADDR']}");
+        $masked = Auth::maskEmail($email);
+        Auth::logActivity($pdo, null, 'unknown', 'Login Failed', "Attempt with non-existent email {$masked} from {$_SERVER['REMOTE_ADDR']}");
     }
     // Use a vague message to avoid disclosing whether the email exists
     Response::error('Invalid email or password.', 401);

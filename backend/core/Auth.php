@@ -216,4 +216,26 @@ class Auth
         );
         $stmt->execute([$userId, $userName, $action, $description, $ip]);
     }
+
+    /**
+     * Anonymize an email by masking the localized part.
+     * e.g., johndoe@example.com -> jo***@example.com
+     */
+    public static function maskEmail(?string $email): string
+    {
+        if (!$email || !str_contains($email, '@')) {
+            return 'unknown';
+        }
+        $parts = explode('@', $email);
+        $name  = $parts[0];
+        $len   = strlen($name);
+
+        if ($len <= 2) {
+            $masked = $name . '***';
+        } else {
+            $masked = substr($name, 0, 2) . '***';
+        }
+
+        return $masked . '@' . ($parts[1] ?? 'unknown');
+    }
 }

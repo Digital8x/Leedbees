@@ -30,10 +30,12 @@ class Response
     {
         // Log security-related errors for traffic monitoring
         if (in_array($code, [401, 403, 429], true)) {
-            $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-            $uri = $_SERVER['REQUEST_URI'] ?? 'unknown';
-            $method = $_SERVER['REQUEST_METHOD'] ?? 'unknown';
-            error_log("[Security] Code $code: $message | IP: $ip | URI: $method $uri");
+            $cleanMsg = str_replace(["\r", "\n"], ' ', $message);
+            $cleanMsg = preg_replace('/[\x00-\x1F\x7F]/', '', $cleanMsg);
+            $ip       = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+            $uri      = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: 'unknown';
+            $method   = $_SERVER['REQUEST_METHOD'] ?? 'unknown';
+            error_log("[Security] Code $code: $cleanMsg | IP: $ip | URI: $method $uri");
         }
         self::json(false, $message, $data, $code);
         exit;
