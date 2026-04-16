@@ -16,6 +16,10 @@ if (file_exists($envFile)) {
     }
 }
 
+// Ensure PHP and Database use the same timezone to prevent rate-limit desync
+$timezone = $_ENV['TIMEZONE'] ?? 'Asia/Kolkata';
+date_default_timezone_set($timezone);
+
 class Database
 {
     private static ?PDO $instance = null;
