@@ -50,7 +50,7 @@ export default function Login() {
       {/* Right form */}
       <div className="login-right">
         <div className="login-form-container">
-          <h2>Welcome back 👋</h2>
+          <h2>Sign in to Lead8X 👋</h2>
           <p>Sign in to your Lead8X account</p>
 
           <form onSubmit={handleSubmit}>
@@ -75,7 +75,7 @@ export default function Login() {
                   id="login-password"
                   className="form-input"
                   type={showPass ? 'text' : 'password'}
-                  placeholder="••••••••"
+                  placeholder="Enter your password"
                   value={form.password}
                   style={{ paddingRight: '44px' }}
                   onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
