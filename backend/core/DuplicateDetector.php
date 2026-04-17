@@ -57,14 +57,22 @@ class DuplicateDetector
             return ['action' => 'duplicate', 'lead_id' => $existing['id']];
         } else {
         // --- NEW LEAD ---
-        $createdAt     = $row['created_at']    ?? date('Y-m-d H:i:s');
-        $userConsent   = $row['user_consent']  ?? 0;
+        $createdAt      = $row['created_at']      ?? date('Y-m-d H:i:s');
+        $hasUserConsent = (int)($row['has_user_consent'] ?? 0);
+        
+        // Validate retention_date format
         $retentionDate = $row['retention_date'] ?? null;
+        if ($retentionDate) {
+            $dt = DateTime::createFromFormat('Y-m-d H:i:s', $retentionDate);
+            if (!$dt || $dt->format('Y-m-d H:i:s') !== $retentionDate) {
+                $retentionDate = null; // Invalidate malformed date
+            }
+        }
 
         $stmt = $this->pdo->prepare(
             "INSERT INTO leads
                 (phone, name, email, city, project, entry_id, refer_url, ip_address, country, device, is_nri,
-                 first_source, first_batch_id, status, user_consent, retention_date, created_at)
+                 first_source, first_batch_id, status, has_user_consent, retention_date, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', ?, ?, ?)"
         );
         $stmt->execute([
@@ -81,7 +89,7 @@ class DuplicateDetector
             $isNri,
             $source  ?: null,
             $batchId,
-            $userConsent,
+            $hasUserConsent,
             $retentionDate,
             $createdAt
         ]);

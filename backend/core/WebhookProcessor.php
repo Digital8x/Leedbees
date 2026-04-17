@@ -54,22 +54,31 @@ class WebhookProcessor
             $batchId = DuplicateDetector::generateBatchId($platformName);
 
             // 2. Data Minimization & Privacy Hardening
-            // Anonymize IP Address (mask last octet)
+            // Anonymize IP Address (mask host portion)
             $ipAddress = $leadData['ip_address'] ?? null;
             if ($ipAddress) {
                 if (filter_var($ipAddress, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
                     $ipAddress = preg_replace('/\.\d+$/', '.0', $ipAddress);
                 } elseif (filter_var($ipAddress, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-                    $ipAddress = substr(bin2hex(inet_pton($ipAddress)), 0, 16) . '::'; // Truncate to /64
+                    // IPv6: Mask the interface ID (keep first 8 bytes aka /64)
+                    $binIp = inet_pton($ipAddress);
+                    if ($binIp) {
+                        $maskedBin = substr($binIp, 0, 8) . str_repeat("\x00", 8);
+                        $ipAddress = inet_ntop($maskedBin);
+                    }
                 }
             }
 
-            // Clean Refer URL (strip query parameters)
+            // Clean Refer URL (strip query parameters and fragments)
             $referUrl = $leadData['refer_url'] ?? null;
             if ($referUrl) {
                 $urlParts = parse_url($referUrl);
-                $referUrl = ($urlParts['scheme'] ?? 'http') . '://' . ($urlParts['host'] ?? '');
-                if (isset($urlParts['path'])) $referUrl .= $urlParts['path'];
+                if ($urlParts && isset($urlParts['host'])) {
+                    $scheme   = isset($urlParts['scheme']) ? $urlParts['scheme'] . '://' : '//';
+                    $referUrl = $scheme . $urlParts['host'] . ($urlParts['path'] ?? '');
+                } else {
+                    $referUrl = null; // Don't build malformed "http://" URLs
+                }
             }
 
             // Calculate Retention Date (Default: 365 days)
@@ -78,24 +87,24 @@ class WebhookProcessor
             $retentionDate = date('Y-m-d H:i:s', strtotime($createdAt . " + $retentionDays days"));
 
             // Extract Consent
-            $userConsent = isset($leadData['user_consent']) ? (int)$leadData['user_consent'] : 0;
+            $hasUserConsent = isset($leadData['has_user_consent']) ? (int)$leadData['has_user_consent'] : 0;
 
             // 3. Prepare row for DuplicateDetector
             $row = [
-                'phone'          => $leadData['phone']      ?? '',
-                'name'           => $leadData['name']       ?? '',
-                'email'          => $leadData['email']      ?? '',
-                'source'         => $platformName,
-                'project'        => $leadData['project']    ?? 'AUTO_IMPORT',
-                'campaign'       => $leadData['campaign']   ?? '',
-                'device'         => $leadData['device']     ?? null,
-                'country'        => $leadData['country']    ?? null,
-                'ip_address'     => $ipAddress,
-                'refer_url'      => $referUrl,
-                'user_consent'   => $userConsent,
-                'retention_date' => $retentionDate,
-                'created_at'     => $createdAt,
-                'is_nri'         => 0
+                'phone'            => $leadData['phone']      ?? '',
+                'name'             => $leadData['name']       ?? '',
+                'email'            => $leadData['email']      ?? '',
+                'source'           => $platformName,
+                'project'          => $leadData['project']    ?? 'AUTO_IMPORT',
+                'campaign'         => $leadData['campaign']   ?? '',
+                'device'           => $leadData['device']     ?? null,
+                'country'          => $leadData['country']    ?? null,
+                'ip_address'       => $ipAddress,
+                'refer_url'        => $referUrl,
+                'has_user_consent' => $hasUserConsent,
+                'retention_date'   => $retentionDate,
+                'created_at'       => $createdAt,
+                'is_nri'           => 0
             ];
 
             // 3. Process via existing detector

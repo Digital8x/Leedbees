@@ -110,19 +110,25 @@ try {
         }
         // Consent Mapping
         elseif (in_array($cleanKey, ['consent', 'user_consent', 'consent_given', 'opt_in'])) {
-            $normalized['user_consent'] = (in_array(strtolower($val), ['yes', 'true', '1', 'on'])) ? 1 : 0;
+            $normalized['has_user_consent'] = (in_array(strtolower($val), ['yes', 'true', '1', 'on'])) ? 1 : 0;
         }
         // UTM/URL
         elseif (in_array($cleanKey, ['url', 'refer_url', 'source_url', 'page url'])) {
             $normalized['refer_url'] = $val;
         }
-        // Date Handling (Robust Parsing: Avoid locale-ambiguous strtotime)
+        // Date Handling (Robust Parsing V3: Relaxed and inclusive)
         elseif (in_array($cleanKey, ['date', 'time', 'timestamp', 'created at'])) {
-            $formats = ['d/m/Y H:i:s', 'd/m/Y H:i', 'd/m/Y', 'Y-m-d H:i:s', 'Y-m-d', 'm/d/Y'];
+            $formats = [
+                'd/m/Y H:i:s', 'd/m/Y H:i', 'd/m/Y', 
+                'Y-m-d H:i:s', 'Y-m-d', 'm/d/Y',
+                'Y-m-d\TH:i:s', 'c', 'Y-m-d\TH:i:s.v\Z', 'Y-m-d\TH:i:s.u\Z'
+            ];
             $parsedDate = null;
             foreach ($formats as $fmt) {
                 $dt = DateTime::createFromFormat($fmt, $val);
-                if ($dt && $dt->format($fmt) === $val) {
+                $errors = DateTime::getLastErrors();
+                // Relaxed check: accept if $dt is valid and no fatal errors occurred
+                if ($dt !== false && $errors['error_count'] === 0) {
                     $parsedDate = $dt->format('Y-m-d H:i:s');
                     break;
                 }
@@ -130,8 +136,7 @@ try {
             if ($parsedDate) {
                 $normalized['created_at'] = $parsedDate;
             } else {
-                // If parsing fails, we could log it, but for now we fallback to WebhookProcessor's NOW()
-                error_log("Google Sheets Webhook: Unable to parse date '{$val}' using supported formats.");
+                error_log("Google Sheets Webhook: Unable to parse date '{$val}' using supported formats (relaxed).");
             }
         }
     }
