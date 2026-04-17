@@ -35,8 +35,8 @@ $stmt = $pdo->prepare("SELECT * FROM webhook_sources WHERE platform = 'google' A
 $stmt->execute();
 $sources = $stmt->fetchAll();
 
-// 3. Authenticate using Security Token
-$providedToken = $_SERVER['HTTP_AUTHORIZATION'] ?? $data['security_token'] ?? '';
+$matchedSource = null;
+foreach ($sources as $source) {
     if ($source['verify_token'] === $providedToken) {
         $matchedSource = $source;
         break;
