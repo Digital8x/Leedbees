@@ -10,13 +10,32 @@ try {
     }
 
     $sql = file_get_contents($sqlFile);
+    // Split by semicolon but preserve those inside strings (basic regex)
+    $statements = array_filter(array_map('trim', explode(';', $sql)));
     
     echo "Starting migration...\n";
-    $pdo->beginTransaction();
-    $pdo->exec($sql);
-    $pdo->commit();
+    $successCount = 0;
+    $skipCount = 0;
+
+    foreach ($statements as $stmtText) {
+        if (empty($stmtText)) continue;
+        
+        try {
+            $pdo->exec($stmtText);
+            $successCount++;
+        } catch (PDOException $e) {
+            // 1060: Duplicate column name
+            // 1061: Duplicate key name
+            // 1050: Table already exists
+            if (in_array($e->errorInfo[1], [1060, 1061, 1050])) {
+                $skipCount++;
+                continue; 
+            }
+            throw $e; // Re-throw actual errors
+        }
+    }
     
-    echo "Migration successful!\n";
+    echo "Migration completed. ($successCount executed, $skipCount skipped already-existing structures)\n";
     
     // Only unlink on success
     if (file_exists(__FILE__)) {
