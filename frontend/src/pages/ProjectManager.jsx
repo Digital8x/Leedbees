@@ -27,7 +27,9 @@ export default function ProjectManager() {
   const loadProjects = useCallback(async () => {
     setLoadingProjects(true)
     try {
-      const res = await getProjects({ mode: 'master' })
+      // 'combined' mode: union of master table + active leads + project_locations
+      // Shows every project that exists anywhere, regardless of how it was created.
+      const res = await getProjects({ mode: 'combined' })
       setProjects(res.data.data.projects || [])
     } catch { toast.error('Failed to load projects.') }
     setLoadingProjects(false)

@@ -17,9 +17,27 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') Response::error('Method not allowed', 
 $pdo  = Database::getConnection();
 $mode = $_GET['mode'] ?? 'active_leads';
 
-// ── MASTER MODE: all projects from master table ───────────────────────────────
+// ── MASTER MODE: all projects from master table only ─────────────────────────
 if ($mode === 'master') {
     $projects = $pdo->query("SELECT id, name, location, created_at FROM projects ORDER BY name")->fetchAll();
+    Response::success('OK', ['projects' => $projects]);
+}
+
+// ── COMBINED MODE: union of master table + active leads + project_locations ───
+// Used by Project Manager so all "real" projects appear regardless of origin.
+elseif ($mode === 'combined') {
+    $stmt = $pdo->query(
+        "SELECT DISTINCT name FROM (
+             SELECT name       FROM projects          WHERE name IS NOT NULL AND name != ''
+             UNION
+             SELECT project AS name FROM leads        WHERE project IS NOT NULL AND project != '' AND deleted_at IS NULL
+             UNION
+             SELECT project_name AS name FROM project_locations WHERE project_name IS NOT NULL AND project_name != ''
+         ) AS all_projects
+         ORDER BY name ASC"
+    );
+    $rows     = $stmt->fetchAll();
+    $projects = array_map(fn($r) => ['id' => $r['name'], 'name' => $r['name']], $rows);
     Response::success('OK', ['projects' => $projects]);
 }
 
