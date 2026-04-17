@@ -29,9 +29,11 @@ CREATE TABLE IF NOT EXISTS webhook_log (
 
 -- 3. Extend existing leads table
 ALTER TABLE leads
-  ADD COLUMN IF NOT EXISTS platform_lead_id VARCHAR(255) NULL,
-  ADD COLUMN IF NOT EXISTS ad_id            VARCHAR(255) NULL,
-  ADD COLUMN IF NOT EXISTS form_id          VARCHAR(255) NULL,
-  ADD COLUMN IF NOT EXISTS campaign_id      VARCHAR(255) NULL,
-  ADD COLUMN IF NOT EXISTS auto_imported    TINYINT(1) DEFAULT 0,
-  ADD INDEX IF NOT EXISTS idx_platform_lead_id (platform_lead_id);
+  ADD COLUMN platform_lead_id VARCHAR(255) NULL,
+  ADD COLUMN ad_id            VARCHAR(255) NULL,
+  ADD COLUMN form_id          VARCHAR(255) NULL,
+  ADD COLUMN campaign_id      VARCHAR(255) NULL,
+  ADD COLUMN auto_imported    TINYINT(1) DEFAULT 0;
+
+ALTER TABLE leads
+  ADD INDEX idx_platform_lead_id (platform_lead_id);
