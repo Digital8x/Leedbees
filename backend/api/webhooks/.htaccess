@@ -1,8 +1,10 @@
-# backend/api/webhooks/.htaccess
-# Security: IP Whitelisting for Webhook Platforms
+# Allow dashboard access to settings and logs (Protected by Auth inside PHP)
+<FilesMatch "^(settings|logs|verify)\.php$">
+  Require all granted
+</FilesMatch>
 
 <RequireAny>
-  # Meta IP ranges (Updated 2026)
+  # Meta IP ranges
   Require ip 31.13.24.0/21
   Require ip 31.13.64.0/18
   Require ip 66.220.144.0/20
@@ -14,7 +16,7 @@
   Require ip 185.60.216.0/22
   Require ip 204.15.20.0/22
 
-  # Google IP ranges (Updated 2026)
+  # Google IP ranges
   Require ip 66.249.64.0/19
   Require ip 209.85.128.0/17
   Require ip 35.190.0.0/17
@@ -26,7 +28,7 @@
   Require ip 108.170.192.0/18
   Require ip 108.177.0.0/17
 
-  # LinkedIn IP ranges (Updated 2026)
+  # LinkedIn IP ranges
   Require ip 108.174.0.0/20
   Require ip 144.2.0.0/16
   Require ip 199.101.160.0/22
