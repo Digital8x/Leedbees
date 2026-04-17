@@ -100,7 +100,7 @@ try {
         elseif (in_array($cleanKey, ['country', 'region', 'nationality'])) {
             $normalized['country'] = $val;
         }
-        elseif ($cleanKey === 'ip' || $cleanKey === 'ip_address') {
+        elseif (in_array($cleanKey, ['ip', 'ip_address', 'ip address'])) {
             /** 
              * PRIVACY COMPLIANCE: IPs are PII. We only assign the raw value here; 
              * WebhookProcessor will anonymize it before storage.
@@ -113,11 +113,11 @@ try {
             $normalized['has_user_consent'] = (in_array(strtolower($val), ['yes', 'true', '1', 'on'])) ? 1 : 0;
         }
         // UTM/URL
-        elseif (in_array($cleanKey, ['url', 'refer_url', 'source_url', 'page url'])) {
+        elseif (in_array($cleanKey, ['url', 'refer_url', 'source_url', 'page url', 'refer url'])) {
             $normalized['refer_url'] = $val;
         }
         // Date Handling (Robust Parsing V3: Relaxed and inclusive)
-        elseif (in_array($cleanKey, ['date', 'time', 'timestamp', 'created at'])) {
+        elseif (in_array($cleanKey, ['date', 'time', 'timestamp', 'created at', 'created time', 'datetime', 'submission time'])) {
             $formats = [
                 'd/m/Y H:i:s', 'd/m/Y H:i', 'd/m/Y', 
                 'Y-m-d H:i:s', 'Y-m-d', 'm/d/Y',

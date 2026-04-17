@@ -117,10 +117,15 @@ export default function Leads() {
   }, [page, limit, search, status, project, device, isNri, showDuplicates, showDeleted, dateFrom, dateTo, sortBy, sortDir])
 
   useEffect(() => { loadLeads() }, [loadLeads])
-  useEffect(() => {
+
+  const loadProjects = useCallback(() => {
     getProjects().then(r => setProjects(r.data.data.projects || [])).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    loadProjects()
     if (isAdmin) getUsers().then(r => setUsers(r.data.data.users || [])).catch(() => {})
-  }, [isAdmin])
+  }, [isAdmin, loadProjects])
 
   /* ── Upload step 1 ───────────────────────────────── */
   const handleFileChange = async (e) => {
@@ -143,7 +148,7 @@ export default function Leads() {
       const res = await confirmUpload({ parse_id: previewData.parse_id, project_name: projName.trim(), refer_url: referUrl.trim() })
       const d = res.data.data
       toast.success(`✅ ${d.new} new leads saved! ${d.duplicates} duplicates.`)
-      setPreviewData(null); loadLeads()
+      setPreviewData(null); loadLeads(); loadProjects()
     } catch (err) { toast.error(err.response?.data?.message || 'Confirm failed.') }
     setConfirming(false)
   }
@@ -229,7 +234,7 @@ export default function Leads() {
     try {
       await deleteLeads(deleteConfirm)
       toast.success(['purge','purge_all'].includes(deleteConfirm.mode) ? 'Permanently deleted.' : 'Moved to trash.')
-      setDeleteConfirm(null); setSelected([]); loadLeads()
+      setDeleteConfirm(null); setSelected([]); loadLeads(); loadProjects()
     } catch { toast.error('Delete failed.') }
   }
 
@@ -298,7 +303,7 @@ export default function Leads() {
           <select className="form-select" style={{ flex:'0 0 120px', fontSize:'0.78rem', padding:'4px 6px' }} value={project}
             onChange={e => { setProject(e.target.value); setPage(1) }}>
             <option value="">All Projects</option>
-            {projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+            {projects.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
           </select>
         )}
         <select className="form-select" style={{ flex:'0 0 118px', fontSize:'0.78rem', padding:'4px 6px' }} value={device}
@@ -344,7 +349,7 @@ export default function Leads() {
             <>
               <select className="form-select" style={{ fontSize:'0.78rem', padding:'3px 6px', width:160 }} id="del-proj-sel" defaultValue="">
                 <option value="">Delete by Project…</option>
-                {projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                {projects.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
               </select>
               <button className="btn btn-danger btn-sm" style={{ fontSize:'0.75rem' }} onClick={() => {
                 const s = document.getElementById('del-proj-sel').value
