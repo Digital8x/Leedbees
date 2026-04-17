@@ -64,7 +64,14 @@ export default function WebhookLog() {
                     <tr key={log.id}>
                       <td className="text-sm text-muted">{new Date(log.created_at).toLocaleString('en-IN')}</td>
                       <td><span className="capitalize font-bold">{log.platform}</span></td>
-                      <td>{getStatusBadge(log.status)}</td>
+                      <td>
+                        {getStatusBadge(log.status)}
+                        {log.status === 'failed' && log.error_message && (
+                          <div className="text-xs text-danger mt-1" style={{maxWidth: 150}}>
+                            {log.error_message}
+                          </div>
+                        )}
+                      </td>
                       <td>
                         {log.lead_id ? (
                            <a href={`/leads?id=${log.lead_id}`} className="link font-mono text-xs"># {log.lead_id}</a>
