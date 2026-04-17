@@ -121,8 +121,13 @@ export default function Dashboard() {
   const [countryChart, setCountryChart] = useState('bar')
   const [deviceChart,  setDeviceChart]  = useState('pie')
 
-  const user = JSON.parse(localStorage.getItem('lead8x_user') || '{}')
-
+  const user = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('lead8x_user') || '{}');
+    } catch {
+      return {};
+    }
+  }, []);
   // Compute effective date range
   const { from: effectiveDateFrom, to: effectiveDateTo } = useMemo(() => {
     if (dateRange === 'custom') return { from: customFrom, to: customTo }

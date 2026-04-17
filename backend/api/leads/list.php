@@ -42,6 +42,10 @@ $autoOnly      = ($_GET['auto_imported']   ?? '') === '1';
 $assignedOnly  = ($_GET['assigned_only']   ?? '') === '1';
 $unassignedOnly= ($_GET['unassigned_only'] ?? '') === '1';
 
+if ($assignedOnly && $unassignedOnly) {
+    Response::error('assigned_only and unassigned_only cannot both be true', 400);
+}
+
 // Sort
 $allowedSorts = ['name' => 'l.name', 'assigned' => 'u.name', 'date' => 'l.created_at', 'id' => 'l.id'];
 $sortBy  = $allowedSorts[$_GET['sort_by'] ?? 'date'] ?? 'l.created_at';
@@ -102,7 +106,12 @@ if ($dateFrom      !== '') { $where .= ' AND DATE(l.created_at) >= ?'; $bindings
 if ($dateTo        !== '') { $where .= ' AND DATE(l.created_at) <= ?'; $bindings[] = $dateTo; }
 if ($autoOnly)             { $where .= ' AND l.auto_imported = 1'; }
 if ($assignedOnly)         { $where .= ' AND l.assigned_to IS NOT NULL'; }
-if ($unassignedOnly)       { $where .= ' AND l.assigned_to IS NULL'; }
+
+// Only apply unassigned filter if we haven't already restricted assignment
+$assignmentRestricted = ($assignee !== null) || ($isCallerRole && !$isAssigneeFiltered);
+if ($unassignedOnly && !$assignmentRestricted) { 
+    $where .= ' AND l.assigned_to IS NULL'; 
+}
 
 // Count + Data — both wrapped so any SQL failure returns a clean JSON error
 try {

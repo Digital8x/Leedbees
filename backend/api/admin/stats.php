@@ -23,6 +23,16 @@ $locationFilter = Validator::sanitizeString($_GET['location']  ?? null, 150);
 $dateFrom       = Validator::sanitizeString($_GET['date_from'] ?? null, 20);
 $dateTo         = Validator::sanitizeString($_GET['date_to']   ?? null, 20);
 
+// Validate dates format
+if (!empty($dateFrom)) {
+    $d = DateTime::createFromFormat('Y-m-d', $dateFrom);
+    if (!$d || $d->format('Y-m-d') !== $dateFrom) $dateFrom = null;
+}
+if (!empty($dateTo)) {
+    $d = DateTime::createFromFormat('Y-m-d', $dateTo);
+    if (!$d || $d->format('Y-m-d') !== $dateTo) $dateTo = null;
+}
+
 // Base condition: active (non-deleted) leads only
 $active = "deleted_at IS NULL";
 
@@ -58,10 +68,16 @@ try {
     $assignStmt->execute($baseBindings);
     $assignedLeads = (int)$assignStmt->fetchColumn();
 } catch (\PDOException $e) {
-    Response::error('Stats error: ' . $e->getMessage(), 500);
+    error_log('Stats overview error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+    Response::error('Stats error', 500);
 }
 
-$totalUsers = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE is_active = 1")->fetchColumn();
+try {
+    $totalUsers = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE is_active = 1")->fetchColumn();
+} catch (\PDOException $e) {
+    error_log('Stats totalUsers error: ' . $e->getMessage());
+    $totalUsers = 0;
+}
 
 // ── Status breakdown ──────────────────────────────────────────────────────────
 try {
