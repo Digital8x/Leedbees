@@ -86,10 +86,10 @@ export const getActivityLog = (p) => api.get('/admin/activity-log.php', { params
 export const downloadBackup = ()  => api.post('/admin/backup.php', {}, { responseType: 'blob' })
 
 // Webhooks
-export const getWebhookSources = ()     => api.get('/webhooks/settings.php')
-export const saveWebhookSource = (data) => api.post('/webhooks/settings.php', data)
-export const deleteWebhookSource = (id) => api.delete('/webhooks/settings.php', { params: { id } })
-export const getWebhookLogs    = (p)     => api.get('/webhooks/logs.php', { params: p })
+export const getWebhookSources = ()     => api.get('/webhooks-admin/settings.php')
+export const saveWebhookSource = (data) => api.post('/webhooks-admin/settings.php', data)
+export const deleteWebhookSource = (id) => api.delete('/webhooks-admin/settings.php', { params: { id } })
+export const getWebhookLogs    = (p)     => api.get('/webhooks-admin/logs.php', { params: p })
 
 // Helper
 export const triggerDownload = (blob, filename) => {

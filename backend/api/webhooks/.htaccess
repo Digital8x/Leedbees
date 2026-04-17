@@ -1,7 +1,5 @@
-# Allow dashboard access to settings and logs (Protected by Auth inside PHP)
-<FilesMatch "^(settings|logs|verify)\.php$">
-  Require all granted
-</FilesMatch>
+# backend/api/webhooks/.htaccess
+# Security: IP Whitelisting for Webhook Platforms
 
 <RequireAny>
   # Meta IP ranges
