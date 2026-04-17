@@ -8,6 +8,7 @@ import Sidebar      from './components/Sidebar.jsx'
 import WebhookSettings from './pages/WebhookSettings.jsx'
 import WebhookLog      from './pages/WebhookLog.jsx'
 import AutoLeads       from './pages/AutoLeads.jsx'
+import Admin           from './pages/Admin.jsx'
 
 const getUser = () => {
   try { return JSON.parse(localStorage.getItem('lead8x_user')) } catch { return null }
