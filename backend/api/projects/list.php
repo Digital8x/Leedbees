@@ -20,11 +20,17 @@ $pdo = Database::getConnection();
 $mode = $_GET['mode'] ?? 'active_leads';
 
 if ($mode === 'master') {
-    // Legacy: fetch from projects master table
+    // Legacy: fetch from projects master table — returns {id:int, name, location, created_at}
     $projects = $pdo->query("SELECT id, name, location, created_at FROM projects ORDER BY name")->fetchAll();
     Response::success('OK', ['projects' => $projects]);
 } else {
-    // Default: only show project names that have at least one active (non-deleted) lead
+    /**
+     * Default mode: returns distinct project names from active (non-deleted) leads.
+     * SCHEMA NOTE: 'id' is set equal to 'name' (string) intentionally, because
+     * leads from Google Sheets / CSV imports may use project names that have no
+     * corresponding row in the projects master table. The client uses id as a
+     * stable React key and name as the filter value — both are the project name here.
+     */
     $stmt = $pdo->query(
         "SELECT DISTINCT project AS name
          FROM leads
@@ -34,7 +40,7 @@ if ($mode === 'master') {
          ORDER BY project ASC"
     );
     $rows = $stmt->fetchAll();
-    // Return as objects with id=name for backward compat with the filter dropdown
+    // id === name is a stable, unique key derived from project name string
     $projects = array_map(fn($r) => ['id' => $r['name'], 'name' => $r['name']], $rows);
     Response::success('OK', ['projects' => $projects]);
 }
