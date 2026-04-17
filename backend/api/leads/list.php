@@ -36,6 +36,7 @@ $device      = Validator::sanitizeString($_GET['device'] ?? null);
 $dateFrom    = Validator::sanitizeString($_GET['date_from'] ?? null);
 $dateTo      = Validator::sanitizeString($_GET['date_to'] ?? null);
 $showDeleted = ($_GET['show_deleted'] ?? '') === '1';
+$autoOnly    = ($_GET['auto_imported'] ?? '') === '1';
 
 // Sort
 $allowedSorts = ['name' => 'l.name', 'assigned' => 'u.name', 'date' => 'l.created_at', 'id' => 'l.id'];
@@ -83,6 +84,7 @@ if ($project !== '') { $where .= ' AND l.project = ?'; $bindings[] = $project; }
 if ($device !== '') { $where .= ' AND l.device LIKE ?'; $bindings[] = "%{$device}%"; }
 if ($dateFrom !== '') { $where .= ' AND DATE(l.created_at) >= ?'; $bindings[] = $dateFrom; }
 if ($dateTo !== '') { $where .= ' AND DATE(l.created_at) <= ?'; $bindings[] = $dateTo; }
+if ($autoOnly) { $where .= ' AND l.auto_imported = 1'; }
 
 // Count
 $countStmt = $pdo->prepare("SELECT COUNT(*) FROM leads l LEFT JOIN users u ON l.assigned_to = u.id {$where}");

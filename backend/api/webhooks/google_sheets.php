@@ -21,15 +21,16 @@ if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
     exit('Invalid JSON');
 }
 
-// 1. Authenticate using Security Token
-// We look for a token in the Authorization header or the payload itself
-$providedToken = $_SERVER['HTTP_AUTHORIZATION'] ?? $data['security_token'] ?? '';
-unset($data['security_token']); // Remove token from data log
-
+// 1. Initial Logging
 $pdo = Database::getConnection();
+$processor = new WebhookProcessor($pdo);
+$logId = $processor->logPayload('google_sheets', $data, $_SERVER['HTTP_X_HUB_SIGNATURE_256'] ?? 'Token Auth');
 
-// Check if any source matches this token (decrypt on the fly for comparison)
-// Since we have multiple sources, we'll look for platform='google'
+// 2. Authenticate using Security Token
+$providedToken = $_SERVER['HTTP_AUTHORIZATION'] ?? $data['security_token'] ?? '';
+unset($data['security_token']); // Remove token from internal data log
+
+// Check if any source matches this token
 $stmt = $pdo->prepare("SELECT * FROM webhook_sources WHERE platform = 'google' AND is_active = 1");
 $stmt->execute();
 $sources = $stmt->fetchAll();
@@ -45,14 +46,12 @@ foreach ($sources as $source) {
 }
 
 if (!$matchedSource) {
+    $processor->updateLogStatus($logId, 'failed', null, "Invalid Security Token");
     http_response_code(401);
     exit('Unauthorized: Invalid security token');
 }
 
-// 2. Log and Process
-$processor = new WebhookProcessor($pdo);
-$logId = $processor->logPayload('google_sheets', $data, 'Token Auth');
-
+// 3. Process the lead
 try {
     // 3. Smart Mapping
     // We try to find common headers in the flat JSON from Sheets
