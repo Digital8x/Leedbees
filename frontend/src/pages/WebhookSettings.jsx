@@ -34,10 +34,17 @@ export default function WebhookSettings() {
     setIsSaving(true)
     try {
       const s = sources[index]
-      await saveWebhookSource(s)
-      toast.success('Settings saved!')
-      load()
-    } catch { toast.error('Failed to save settings.') }
+      const res = await saveWebhookSource(s)
+      if (res.data.success) {
+        toast.success(res.data.message || 'Settings saved!')
+        load()
+      } else {
+        toast.error(res.data.message || 'Failed to save settings.')
+      }
+    } catch (err) { 
+      const msg = err.response?.data?.message || 'Failed to save settings. Check your server logs.'
+      toast.error(msg) 
+    }
     finally { setIsSaving(false) }
   }
 
@@ -49,10 +56,17 @@ export default function WebhookSettings() {
     }
     if (!confirm('Are you sure you want to delete this source?')) return
     try {
-      await deleteWebhookSource(s.id)
-      toast.success('Source deleted.')
-      load()
-    } catch { toast.error('Failed to delete source.') }
+      const res = await deleteWebhookSource(s.id)
+      if (res.data.success) {
+        toast.success(res.data.message || 'Source deleted.')
+        load()
+      } else {
+        toast.error(res.data.message || 'Failed to delete source.')
+      }
+    } catch (err) { 
+      const msg = err.response?.data?.message || 'Failed to delete source.'
+      toast.error(msg) 
+    }
   }
 
   const copyUrl = async (platform, id) => {
