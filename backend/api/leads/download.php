@@ -62,6 +62,10 @@ if ($status) { $where .= ' AND l.status = ?'; $bindings[] = $status; }
 $batchId = Validator::sanitizeString($_GET['batch_id'] ?? null);
 if ($batchId) { $where .= ' AND l.first_batch_id = ?'; $bindings[] = $batchId; }
 
+// Location (city) filter
+$location = Validator::sanitizeString($_GET['location'] ?? null);
+if ($location) { $where .= ' AND l.city = ?'; $bindings[] = $location; }
+
 // NRI filter
 $isNriRaw = $_GET['is_nri'] ?? null;
 if ($isNriRaw !== null) { 

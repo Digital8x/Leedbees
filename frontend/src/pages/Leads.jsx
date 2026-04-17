@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   getLeads, uploadLeadsPreview, confirmUpload, updateFeedback, uploadFeedback,
-  getTimeline, deleteLeads, mergeLeads, getProjects, getUsers,
+  getTimeline, deleteLeads, mergeLeads, getProjects, getUsers, getLocations,
   triggerDownload, downloadLeads
 } from '../api/axios.js'
 import toast from 'react-hot-toast'
@@ -65,6 +65,8 @@ export default function Leads() {
   const [search, setSearch]         = useState('')
   const [status, setStatus]         = useState('')
   const [project, setProject]       = useState('')
+  const [location, setLocation]     = useState('')
+  const [locations, setLocations2]  = useState([])
   const [device, setDevice]         = useState('')
   const [dateFrom, setDateFrom]     = useState('')
   const [dateTo, setDateTo]         = useState('')
@@ -100,7 +102,7 @@ export default function Leads() {
   const loadLeads = useCallback(async () => {
     setLoading(true)
     try {
-      const params = { page, limit, search, status, project, device,
+      const params = { page, limit, search, status, project, location, device,
         sort_by: sortBy, sort_dir: sortDir }
       if (isNri)          params.is_nri = 1
       if (showDuplicates) params.is_duplicate = 1
@@ -114,7 +116,7 @@ export default function Leads() {
       setSelected([])
     } catch { toast.error('Failed to load leads.') }
     setLoading(false)
-  }, [page, limit, search, status, project, device, isNri, showDuplicates, showDeleted, dateFrom, dateTo, sortBy, sortDir])
+  }, [page, limit, search, status, project, location, device, isNri, showDuplicates, showDeleted, dateFrom, dateTo, sortBy, sortDir])
 
   useEffect(() => { loadLeads() }, [loadLeads])
 
@@ -126,6 +128,16 @@ export default function Leads() {
     loadProjects()
     if (isAdmin) getUsers().then(r => setUsers(r.data.data.users || [])).catch(() => {})
   }, [isAdmin, loadProjects])
+
+  // Load locations when project filter changes
+  useEffect(() => {
+    setLocation('')
+    if (project) {
+      getLocations(project).then(r => setLocations2(r.data.data.locations || [])).catch(() => setLocations2([]))
+    } else {
+      setLocations2([])
+    }
+  }, [project])
 
   /* ── Upload step 1 ───────────────────────────────── */
   const handleFileChange = async (e) => {
@@ -179,7 +191,7 @@ export default function Leads() {
   }
   const handleDownloadAll = async () => {
     try {
-      const params = { search, status, project, ...(isNri ? { is_nri: 1 } : {}) }
+      const params = { search, status, project, location, ...(isNri ? { is_nri: 1 } : {}) }
       const res = await downloadLeads(params)
       triggerDownload(res.data, 'leads_export.xlsx')
     } catch { toast.error('Export failed.') }
@@ -253,7 +265,7 @@ export default function Leads() {
   const fmt     = (v) => v || '—'
   const fmtDate = (v) => v ? new Date(v).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'2-digit' }) : '—'
   const resetFilters = () => {
-    setSearch(''); setStatus(''); setProject(''); setDevice('');
+    setSearch(''); setStatus(''); setProject(''); setLocation(''); setDevice('');
     setDateFrom(''); setDateTo(''); setIsNri(false);
     setShowDuplicates(false); setShowDeleted(false); setPage(1)
   }
@@ -304,6 +316,13 @@ export default function Leads() {
             onChange={e => { setProject(e.target.value); setPage(1) }}>
             <option value="">All Projects</option>
             {projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+          </select>
+        )}
+        {isAdmin && locations.length > 0 && (
+          <select className="form-select" style={{ flex:'0 0 120px', fontSize:'0.78rem', padding:'4px 6px' }} value={location}
+            onChange={e => { setLocation(e.target.value); setPage(1) }}>
+            <option value="">All Locations</option>
+            {locations.map(l => <option key={l.id} value={l.location}>{l.location}</option>)}
           </select>
         )}
         <select className="form-select" style={{ flex:'0 0 118px', fontSize:'0.78rem', padding:'4px 6px' }} value={device}

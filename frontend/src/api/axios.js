@@ -70,6 +70,20 @@ export const getProjects = () =>
 export const saveProject = (data) =>
   api.post('/projects/save.php', data)
 
+// Project Locations
+export const getLocations = (project_name) =>
+  api.get('/projects/locations.php', { params: { project_name } })
+
+export const saveLocation = (data) =>
+  api.post('/projects/locations.php', data)
+
+export const deleteLocation = (id) =>
+  api.delete('/projects/locations.php', { params: { id } })
+
+// Bulk URL update for a project's leads
+export const bulkUpdateUrl = (data) =>
+  api.post('/projects/bulk-url.php', data)
+
 // Users
 export const getUsers    = ()     => api.get('/users/list.php')
 export const createUser  = (data) => api.post('/users/create.php', data)

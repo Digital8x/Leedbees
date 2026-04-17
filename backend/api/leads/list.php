@@ -31,8 +31,9 @@ $isDup       = isset($_GET['is_duplicate']) ? (int)$_GET['is_duplicate'] : null;
 $isNri       = isset($_GET['is_nri'])       ? (int)$_GET['is_nri']       : null;
 $assignee    = Validator::asInt($_GET['assigned_to'] ?? null, -1);
 if ($assignee === -1) $assignee = null;
-$project     = Validator::sanitizeString($_GET['project'] ?? null);
-$device      = Validator::sanitizeString($_GET['device'] ?? null);
+$project     = Validator::sanitizeString($_GET['project']  ?? null);
+$location    = Validator::sanitizeString($_GET['location']  ?? null);
+$device      = Validator::sanitizeString($_GET['device']    ?? null);
 $dateFrom    = Validator::sanitizeString($_GET['date_from'] ?? null);
 $dateTo      = Validator::sanitizeString($_GET['date_to'] ?? null);
 $showDeleted = ($_GET['show_deleted'] ?? '') === '1';
@@ -80,8 +81,9 @@ if ($batchId !== '') { $where .= ' AND l.first_batch_id = ?'; $bindings[] = $bat
 if ($isDup !== null) { $where .= ' AND l.is_duplicate = ?'; $bindings[] = $isDup; }
 if ($isNri !== null) { $where .= ' AND l.is_nri = ?'; $bindings[] = $isNri; }
 if ($assignee !== null) { $where .= ' AND l.assigned_to = ?'; $bindings[] = $assignee; }
-if ($project !== '') { $where .= ' AND l.project = ?'; $bindings[] = $project; }
-if ($device !== '') { $where .= ' AND l.device LIKE ?'; $bindings[] = "%{$device}%"; }
+if ($project  !== '') { $where .= ' AND l.project = ?'; $bindings[] = $project; }
+if ($location !== '') { $where .= ' AND l.city = ?'; $bindings[] = $location; }
+if ($device   !== '') { $where .= ' AND l.device LIKE ?'; $bindings[] = "%{$device}%"; }
 if ($dateFrom !== '') { $where .= ' AND DATE(l.created_at) >= ?'; $bindings[] = $dateFrom; }
 if ($dateTo !== '') { $where .= ' AND DATE(l.created_at) <= ?'; $bindings[] = $dateTo; }
 if ($autoOnly) { $where .= ' AND l.auto_imported = 1'; }

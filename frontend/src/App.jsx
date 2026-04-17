@@ -9,6 +9,7 @@ import WebhookSettings from './pages/WebhookSettings.jsx'
 import WebhookLog      from './pages/WebhookLog.jsx'
 import AutoLeads       from './pages/AutoLeads.jsx'
 import Admin           from './pages/Admin.jsx'
+import ProjectManager  from './pages/ProjectManager.jsx'
 
 const getUser = () => {
   try { return JSON.parse(localStorage.getItem('lead8x_user')) } catch { return null }
@@ -73,6 +74,11 @@ export default function App() {
         <Route path="/auto-leads" element={
           <PrivateRoute roles={['Admin', 'Manager']}>
             <Layout><AutoLeads /></Layout>
+          </PrivateRoute>
+        } />
+        <Route path="/projects" element={
+          <PrivateRoute roles={['Admin', 'Manager']}>
+            <Layout><ProjectManager /></Layout>
           </PrivateRoute>
         } />
         <Route path="*" element={<Navigate to="/" replace />} />

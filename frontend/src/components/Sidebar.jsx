@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Upload, GitBranch,
-  Settings, LogOut, Menu, X, Shield, Zap, Activity
+  Settings, LogOut, Menu, X, Shield, Zap, Activity, FolderKanban
 } from 'lucide-react'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
@@ -16,6 +16,7 @@ const navItems = [
   { to: '/webhook-logs',label: 'Webhook Logs',  icon: Activity,      roles: ['Admin'] },
   { to: '/users',       label: 'Users',        icon: Users,           roles: ['Admin', 'Manager'] },
   { to: '/distribution',label: 'Distribution', icon: GitBranch,       roles: ['Admin', 'Manager'] },
+  { to: '/projects',    label: 'Project Manager', icon: FolderKanban, roles: ['Admin', 'Manager'] },
   { to: '/admin',       label: 'Admin Panel',   icon: Shield,        roles: ['Admin'] },
 ];
 

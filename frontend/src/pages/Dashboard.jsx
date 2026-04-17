@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getStats } from '../api/axios.js'
-import { Users, Upload, GitBranch, TrendingUp, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { Users, Upload, GitBranch, TrendingUp, AlertTriangle, CheckCircle, RefreshCw, MapPin } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
 import toast from 'react-hot-toast'
 
 const STATUS_COLORS = {
@@ -9,6 +9,7 @@ const STATUS_COLORS = {
   'Interested':'#10b981','Follow Up':'#f59e0b','Site Visit':'#8b5cf6',
   'Booked':'#34d399','Not Interested':'#ef4444','Wrong Number':'#6b7280'
 }
+const PIE_COLORS = ['#7c3aed','#06b6d4','#10b981','#f59e0b','#ef4444','#a855f7','#8b5cf6','#34d399','#6b7280','#f97316']
 
 export default function Dashboard() {
   const [stats, setStats]     = useState(null)
@@ -89,6 +90,36 @@ export default function Dashboard() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
+
+          {/* Location Distribution Pie Chart */}
+          <div className="card">
+            <div className="section-title"><MapPin size={18} color="var(--accent)"/> Location Distribution</div>
+            {(stats?.location_breakdown || []).length === 0
+              ? <div className="empty-state"><p>No location data yet.</p></div>
+              : <ResponsiveContainer width="100%" height={240}>
+                  <PieChart>
+                    <Pie
+                      data={stats.location_breakdown}
+                      dataKey="count"
+                      nameKey="location"
+                      cx="50%" cy="50%"
+                      outerRadius={75}
+                      label={({ location, percent }) => `${location} ${(percent*100).toFixed(0)}%`}
+                      labelLine={false}
+                    >
+                      {stats.location_breakdown.map((_, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text-primary)', fontSize:12 }}
+                      formatter={(val) => [val + ' leads']}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '0.73rem', color: 'var(--text-muted)' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+            }
           </div>
 
           {/* Recent Batches */}

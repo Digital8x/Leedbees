@@ -116,27 +116,37 @@ try {
         elseif (in_array($cleanKey, ['url', 'refer_url', 'source_url', 'page url', 'refer url'])) {
             $normalized['refer_url'] = $val;
         }
-        // Date Handling (Robust Parsing V3: Relaxed and inclusive)
+        // Date Handling (Robust Parsing V4: handles ISO 8601 with ms and Z timezone)
         elseif (in_array($cleanKey, ['date', 'time', 'timestamp', 'created at', 'created time', 'datetime', 'submission time'])) {
             $formats = [
-                'd/m/Y H:i:s', 'd/m/Y H:i', 'd/m/Y', 
+                'd/m/Y H:i:s', 'd/m/Y H:i', 'd/m/Y',
                 'Y-m-d H:i:s', 'Y-m-d', 'm/d/Y',
-                'Y-m-d\TH:i:s', 'c', 'Y-m-d\TH:i:s.v\Z', 'Y-m-d\TH:i:s.u\Z'
+                'Y-m-d\TH:i:s', 'Y-m-d\TH:i:sP'
             ];
             $parsedDate = null;
+            // Try explicit formats first
             foreach ($formats as $fmt) {
                 $dt = DateTime::createFromFormat($fmt, $val);
                 $errors = DateTime::getLastErrors();
-                // Relaxed check: accept if $dt is valid and no fatal errors occurred
                 if ($dt !== false && $errors['error_count'] === 0) {
-                    $parsedDate = $dt->format('Y-m-d H:i:s');
+                    $parsedDate = $dt->setTimezone(new DateTimeZone('Asia/Kolkata'))->format('Y-m-d H:i:s');
                     break;
+                }
+            }
+            // Fallback: native DateTime handles ISO 8601 variants like 2025-06-08T16:33:31.000Z
+            if (!$parsedDate) {
+                try {
+                    $dt = new DateTime($val, new DateTimeZone('UTC'));
+                    $dt->setTimezone(new DateTimeZone('Asia/Kolkata'));
+                    $parsedDate = $dt->format('Y-m-d H:i:s');
+                } catch (Throwable $ex) {
+                    $parsedDate = null;
                 }
             }
             if ($parsedDate) {
                 $normalized['created_at'] = $parsedDate;
             } else {
-                error_log("Google Sheets Webhook: Unable to parse date '{$val}' using supported formats (relaxed).");
+                error_log("Google Sheets Webhook: Unable to parse date '{$val}'.");
             }
         }
     }
