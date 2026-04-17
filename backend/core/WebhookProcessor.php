@@ -55,13 +55,17 @@ class WebhookProcessor
 
             // 2. Prepare row for DuplicateDetector
             $row = [
-                'phone'    => $leadData['phone']    ?? '',
-                'name'     => $leadData['name']     ?? '',
-                'email'    => $leadData['email']    ?? '',
-                'source'   => $platformName,
-                'project'  => $leadData['project']  ?? 'AUTO_IMPORT',
-                'campaign' => $leadData['campaign'] ?? '',
-                'is_nri'   => 0
+                'phone'      => $leadData['phone']      ?? '',
+                'name'       => $leadData['name']       ?? '',
+                'email'      => $leadData['email']      ?? '',
+                'source'     => $platformName,
+                'project'    => $leadData['project']    ?? 'AUTO_IMPORT',
+                'campaign'   => $leadData['campaign']   ?? '',
+                'device'     => $leadData['device']     ?? null,
+                'country'    => $leadData['country']    ?? null,
+                'ip_address' => $leadData['ip_address'] ?? null,
+                'refer_url'  => $leadData['refer_url']  ?? null,
+                'is_nri'     => 0
             ];
 
             // 3. Process via existing detector

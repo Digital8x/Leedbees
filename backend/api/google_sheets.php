@@ -87,9 +87,29 @@ try {
         elseif (in_array($cleanKey, ['email', 'email id', 'email address'])) {
             $normalized['email'] = $val;
         }
-        // Additional Info
-        elseif ($cleanKey === 'campaign') {
-            $normalized['campaign'] = $val;
+        // Project/City Mapping
+        elseif (in_array($cleanKey, ['project', 'property', 'location', 'city'])) {
+            $normalized['project'] = $val;
+        }
+        // Device/Platform Info
+        elseif (in_array($cleanKey, ['device', 'platform', 'os', 'browser'])) {
+            $normalized['device'] = $val;
+        }
+        // Country/IP
+        elseif (in_array($cleanKey, ['country', 'region', 'nationality'])) {
+            $normalized['country'] = $val;
+        }
+        elseif ($cleanKey === 'ip' || $cleanKey === 'ip_address') {
+            $normalized['ip_address'] = $val;
+        }
+        // UTM/URL
+        elseif (in_array($cleanKey, ['url', 'refer_url', 'source_url', 'page url'])) {
+            $normalized['refer_url'] = $val;
+        }
+        // Date Handling (If we have a valid date in the sheet)
+        elseif ($cleanKey === 'date' || $cleanKey === 'time') {
+            $time = strtotime($val);
+            if ($time) $normalized['created_at'] = date('Y-m-d H:i:s', $time);
         }
     }
 
