@@ -33,8 +33,12 @@ try {
 }
 
 try {
-    // 2. Authenticate using Security Token
-    $providedToken = $_SERVER['HTTP_AUTHORIZATION'] ?? $data['security_token'] ?? '';
+    // 2. Authenticate using Security Token (Check Header or Payload)
+    $providedToken = $_SERVER['HTTP_X_SECURITY_TOKEN'] ?? 
+                     $_SERVER['HTTP_AUTHORIZATION'] ?? 
+                     $data['security_token'] ?? 
+                     '';
+    
     unset($data['security_token']); // Remove token from internal data log
 
     // Check if any source matches this token
