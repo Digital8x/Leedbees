@@ -56,23 +56,22 @@ export default function WebhookSettings() {
   }
 
   const copyUrl = async (platform, id) => {
-    if (!id) return;
     const baseUrl = window.location.origin + '/api/webhooks/'
-    // Map 'google' platform to 'google_sheets' for url generation
     const endpoint = platform === 'google' ? 'google_sheets' : platform
     const url = `${baseUrl}${endpoint}.php`
+    
     try {
       await navigator.clipboard.writeText(url)
-      setCopiedId(id)
+      setCopiedId(id || platform) // Use platform if id is null
       setTimeout(() => setCopiedId(null), 2000)
-      toast.success('URL copied to clipboard!')
+      toast.success('Webhook URL copied to clipboard!')
     } catch (err) {
-      toast.error('Failed to copy URL.')
+      toast.error('Failed to copy URL. Please copy it manually.')
     }
   }
 
   const getIcon = (platform) => {
-    if (platform === 'google') return <Globe size={20} color="#34A853"/> // Green for Sheets
+    if (platform === 'google') return <Globe size={20} color="#34A853"/> 
     if (platform === 'meta') return <Facebook size={20} color="#1877F2"/>
     if (platform === 'linkedin') return <Linkedin size={20} color="#0A66C2"/>
     return <Globe size={20}/>
@@ -95,7 +94,7 @@ export default function WebhookSettings() {
         ) : (
           <div className="grid grid-1 gap-6">
             {sources.map((s, i) => (
-              <div className="card" key={s.id || `new-${i}`}>
+              <div className="card animate-fade-in" key={s.id || `new-${i}`}>
                 <div className="card-header flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     {getIcon(s.platform)}
@@ -110,12 +109,12 @@ export default function WebhookSettings() {
                       onClick={() => copyUrl(s.platform, s.id)}
                       title="Copy Webhook URL"
                     >
-                      {copiedId === s.id ? <Check size={14}/> : <Copy size={14}/>}
+                      {copiedId === (s.id || s.platform) ? <Check size={14} className="text-success"/> : <Copy size={14}/>}
                     </button>
-                    <button className="btn btn-success btn-sm" onClick={() => handleSave(i)} disabled={isSaving}>
+                    <button className="btn btn-success btn-sm" onClick={() => handleSave(i)} disabled={isSaving} title="Save Changes">
                       <Save size={14}/>
                     </button>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(i)}>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(i)} title="Delete Source">
                       <Trash2 size={14}/>
                     </button>
                   </div>
@@ -148,11 +147,15 @@ export default function WebhookSettings() {
                    <div className="form-group">
                     <label>{s.platform === 'google' ? 'Security Token (Shared Secret)' : 'Verify Token / Secret'}</label>
                     <input 
-                      type="password" className="form-input" 
+                      type="text" className="form-input font-mono" 
                       value={s.verify_token || ''}
                       onChange={(e) => handleChange(i, 'verify_token', e.target.value)}
-                      placeholder={s.platform === 'google' ? 'Paste in App Script' : ''}
+                      placeholder={s.platform === 'google' ? 'e.g. MySecretToken123' : ''}
+                      autoComplete="off"
                     />
+                    <small className="text-muted mt-1" style={{fontSize:'0.7rem'}}>
+                      {s.platform === 'google' ? 'Copy this to your Google App Script.' : 'Used for webhook verification.'}
+                    </small>
                   </div>
                   <div className="form-group">
                     <label>App Secret (Meta/LinkedIn)</label>
@@ -160,6 +163,7 @@ export default function WebhookSettings() {
                       type="password" className="form-input" 
                       value={s.app_secret || ''}
                       onChange={(e) => handleChange(i, 'app_secret', e.target.value)}
+                      autoComplete="new-password"
                     />
                   </div>
                   <div className="form-group">
@@ -168,6 +172,7 @@ export default function WebhookSettings() {
                       type="password" className="form-input" 
                       value={s.graph_token || ''}
                       onChange={(e) => handleChange(i, 'graph_token', e.target.value)}
+                      autoComplete="new-password"
                     />
                   </div>
                 </div>
