@@ -58,7 +58,9 @@ export default function WebhookSettings() {
   const copyUrl = async (platform, id) => {
     if (!id) return;
     const baseUrl = window.location.origin + '/api/webhooks/'
-    const url = `${baseUrl}${platform}.php`
+    // Map 'google' platform to 'google_sheets' for url generation
+    const endpoint = platform === 'google' ? 'google_sheets' : platform
+    const url = `${baseUrl}${endpoint}.php`
     try {
       await navigator.clipboard.writeText(url)
       setCopiedId(id)
@@ -70,7 +72,7 @@ export default function WebhookSettings() {
   }
 
   const getIcon = (platform) => {
-    if (platform === 'google') return <Globe size={20} color="#4285F4"/>
+    if (platform === 'google') return <Globe size={20} color="#34A853"/> // Green for Sheets
     if (platform === 'meta') return <Facebook size={20} color="#1877F2"/>
     if (platform === 'linkedin') return <Linkedin size={20} color="#0A66C2"/>
     return <Globe size={20}/>
@@ -127,16 +129,16 @@ export default function WebhookSettings() {
                       value={s.platform} 
                       onChange={(e) => handleChange(i, 'platform', e.target.value)}
                     >
-                      <option value="google">Google Ads</option>
+                      <option value="google">Google Sheets (App Script)</option>
                       <option value="meta">Meta (Facebook/Instagram)</option>
-                      <option value="linkedin">LinkedIn</option>
+                      <option value="linkedin">LinkedIn Ads</option>
                     </select>
                   </div>
                   <div className="form-group">
                     <label>Source Name (Unique ID)</label>
                     <input 
                       type="text" className="form-input" 
-                      value={s.source_name} placeholder="e.g. My_FB_Campaign"
+                      value={s.source_name} placeholder="e.g. Sales_Sheet_2026"
                       onChange={(e) => handleChange(i, 'source_name', e.target.value)}
                     />
                   </div>
@@ -144,11 +146,12 @@ export default function WebhookSettings() {
 
                 <div className="grid grid-3 gap-4 mt-4">
                    <div className="form-group">
-                    <label>Verify Token / Secret Key</label>
+                    <label>{s.platform === 'google' ? 'Security Token (Shared Secret)' : 'Verify Token / Secret'}</label>
                     <input 
                       type="password" className="form-input" 
                       value={s.verify_token || ''}
                       onChange={(e) => handleChange(i, 'verify_token', e.target.value)}
+                      placeholder={s.platform === 'google' ? 'Paste in App Script' : ''}
                     />
                   </div>
                   <div className="form-group">
