@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Upload, GitBranch,
-  Settings, LogOut, Menu, X, Shield
+  Settings, LogOut, Menu, X, Shield, Zap, Activity
 } from 'lucide-react'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
@@ -11,13 +11,16 @@ const getUser = () => { try { return JSON.parse(localStorage.getItem('lead8x_use
 const navItems = [
   { to: '/',            label: 'Dashboard',    icon: LayoutDashboard, roles: null },
   { to: '/leads',       label: 'Leads',        icon: Upload,          roles: null },
-  { to: '/distribution',label: 'Distribution', icon: GitBranch,       roles: ['Admin','Manager'] },
-  { to: '/users',       label: 'Users',        icon: Users,           roles: ['Admin','Manager'] },
-  { to: '/admin',       label: 'Admin Panel',  icon: Shield,          roles: ['Admin'] },
-]
+  { to: '/auto-leads',  label: 'Real-time Leads', icon: Zap,           roles: ['Admin', 'Manager'] },
+  { to: '/webhooks',    label: 'Webhooks',      icon: Settings,      roles: ['Admin'] },
+  { to: '/webhook-logs',label: 'Webhook Logs',  icon: Activity,      roles: ['Admin'] },
+  { to: '/users',       label: 'Users',        icon: Users,           roles: ['Admin', 'Manager'] },
+  { to: '/distribution',label: 'Distribution', icon: GitBranch,       roles: ['Admin', 'Manager'] },
+  { to: '/admin',       label: 'Admin Panel',   icon: Shield,        roles: ['Admin'] },
+];
 
 export default function Sidebar() {
-  const user     = getUser()
+  const user = getUser()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
 
@@ -28,18 +31,18 @@ export default function Sidebar() {
     navigate('/login')
   }
 
-  const initials = user?.name?.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase() || 'U'
+  const initials = user?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'
 
   return (
     <>
       {/* Mobile toggle */}
       <button
         className="btn btn-secondary"
-        style={{ position:'fixed', top:12, left:12, zIndex:200, display:'none', padding:'8px' }}
+        style={{ position: 'fixed', top: 12, left: 12, zIndex: 200, display: 'none', padding: '8px' }}
         onClick={() => setOpen(o => !o)}
         id="sidebar-toggle"
       >
-        {open ? <X size={18}/> : <Menu size={18}/>}
+        {open ? <X size={18} /> : <Menu size={18} />}
       </button>
 
       <nav className={`sidebar${open ? ' open' : ''}`}>
@@ -50,7 +53,7 @@ export default function Sidebar() {
         </div>
 
         {/* Nav links */}
-        <div className="nav-section" style={{ flex:1 }}>
+        <div className="nav-section" style={{ flex: 1 }}>
           <div className="nav-section-label">Navigation</div>
           {navItems.map(item => {
             if (item.roles && !item.roles.includes(user?.role)) return null
@@ -79,7 +82,7 @@ export default function Sidebar() {
               <span>{user?.role || ''}</span>
             </div>
           </div>
-          <button className="nav-link" style={{ color:'var(--danger)' }} onClick={handleLogout}>
+          <button className="nav-link" style={{ color: 'var(--danger)' }} onClick={handleLogout}>
             <LogOut size={17} /> Logout
           </button>
         </div>

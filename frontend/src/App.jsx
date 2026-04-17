@@ -4,8 +4,10 @@ import Dashboard    from './pages/Dashboard.jsx'
 import Leads        from './pages/Leads.jsx'
 import Distribution from './pages/Distribution.jsx'
 import Users        from './pages/Users.jsx'
-import Admin        from './pages/Admin.jsx'
 import Sidebar      from './components/Sidebar.jsx'
+import WebhookSettings from './pages/WebhookSettings.jsx'
+import WebhookLog      from './pages/WebhookLog.jsx'
+import AutoLeads       from './pages/AutoLeads.jsx'
 
 const getUser = () => {
   try { return JSON.parse(localStorage.getItem('lead8x_user')) } catch { return null }
@@ -55,6 +57,21 @@ export default function App() {
         <Route path="/admin" element={
           <PrivateRoute roles={['Admin']}>
             <Layout><Admin /></Layout>
+          </PrivateRoute>
+        } />
+        <Route path="/webhooks" element={
+          <PrivateRoute roles={['Admin']}>
+            <Layout><WebhookSettings /></Layout>
+          </PrivateRoute>
+        } />
+        <Route path="/webhook-logs" element={
+          <PrivateRoute roles={['Admin']}>
+            <Layout><WebhookLog /></Layout>
+          </PrivateRoute>
+        } />
+        <Route path="/auto-leads" element={
+          <PrivateRoute roles={['Admin', 'Manager']}>
+            <Layout><AutoLeads /></Layout>
           </PrivateRoute>
         } />
         <Route path="*" element={<Navigate to="/" replace />} />
