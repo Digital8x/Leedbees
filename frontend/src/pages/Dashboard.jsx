@@ -31,7 +31,7 @@ function computeDateRange(range) {
 }
 
 /* ── Reusable Analytics Chart Widget ─────────────────────── */
-function ChartWidget({ title, Icon, data, nameKey, countKey, chartType, setChartType, onItemClick, emptyMsg }) {
+function ChartWidget({ title, Icon, data, nameKey, countKey, chartType, setChartType, onItemClick, emptyMsg, headerExtra }) {
   const safeData = (data || []).filter(r => r[nameKey] && r[countKey] > 0)
   const total    = safeData.reduce((s, r) => s + Number(r[countKey] || 0), 0)
 
@@ -46,21 +46,24 @@ function ChartWidget({ title, Icon, data, nameKey, countKey, chartType, setChart
         <div className="section-title" style={{ margin:0 }}>
           <Icon size={17} color="var(--accent)"/> {title}
         </div>
-        <div style={{ display:'flex', gap:3 }}>
-          <button
-            onClick={() => setChartType('bar')}
-            title="Bar chart"
-            style={{ background: chartType==='bar' ? 'var(--primary)' : 'var(--bg-hover)',
-              border:'none', borderRadius:6, padding:'3px 8px', cursor:'pointer',
-              color: chartType==='bar' ? '#fff' : 'var(--text-muted)', fontSize:'0.72rem', fontWeight:600 }}
-          ><BarChart2 size={12} style={{ verticalAlign:'middle', marginRight:2 }}/>Bar</button>
-          <button
-            onClick={() => setChartType('pie')}
-            title="Pie chart"
-            style={{ background: chartType==='pie' ? 'var(--primary)' : 'var(--bg-hover)',
-              border:'none', borderRadius:6, padding:'3px 8px', cursor:'pointer',
-              color: chartType==='pie' ? '#fff' : 'var(--text-muted)', fontSize:'0.72rem', fontWeight:600 }}
-          ><PieIcon size={12} style={{ verticalAlign:'middle', marginRight:2 }}/>Pie</button>
+        <div style={{ display:'flex', gap:10, alignItems: 'center' }}>
+          {headerExtra}
+          <div style={{ display:'flex', gap:3 }}>
+            <button
+              onClick={() => setChartType('bar')}
+              title="Bar chart"
+              style={{ background: chartType==='bar' ? 'var(--primary)' : 'var(--bg-hover)',
+                border:'none', borderRadius:6, padding:'3px 8px', cursor:'pointer',
+                color: chartType==='bar' ? '#fff' : 'var(--text-muted)', fontSize:'0.72rem', fontWeight:600 }}
+            ><BarChart2 size={12} style={{ verticalAlign:'middle', marginRight:2 }}/>Bar</button>
+            <button
+              onClick={() => setChartType('pie')}
+              title="Pie chart"
+              style={{ background: chartType==='pie' ? 'var(--primary)' : 'var(--bg-hover)',
+                border:'none', borderRadius:6, padding:'3px 8px', cursor:'pointer',
+                color: chartType==='pie' ? '#fff' : 'var(--text-muted)', fontSize:'0.72rem', fontWeight:600 }}
+            ><PieIcon size={12} style={{ verticalAlign:'middle', marginRight:2 }}/>Pie</button>
+          </div>
         </div>
       </div>
 
@@ -72,7 +75,7 @@ function ChartWidget({ title, Icon, data, nameKey, countKey, chartType, setChart
               <BarChart data={safeData} barSize={22}
                 onClick={e => e?.activePayload?.[0] && onItemClick(e.activePayload[0].payload[nameKey])}>
                 <XAxis dataKey={nameKey} tick={{fill:'var(--text-muted)',fontSize:10}} tickLine={false} axisLine={false}
-                  interval={0} angle={-30} textAnchor="end" height={50}/>
+                  angle={-35} textAnchor="end" height={60}/>
                 <YAxis tick={{fill:'var(--text-muted)',fontSize:10}} tickLine={false} axisLine={false}/>
                 <Tooltip {...tooltipStyle}/>
                 <Bar dataKey={countKey} radius={[5,5,0,0]} style={{ cursor:'pointer' }}>
@@ -117,9 +120,10 @@ export default function Dashboard() {
   // Chart type toggles for 5 analytics widgets
   const [projChart,    setProjChart]    = useState('bar')
   const [nriChart,     setNriChart]     = useState('pie')
-  const [cityChart,    setCityChart]    = useState('bar')
   const [countryChart, setCountryChart] = useState('bar')
   const [deviceChart,  setDeviceChart]  = useState('pie')
+  
+  const [excludeIndia, setExcludeIndia] = useState(false)
 
   const user = useMemo(() => {
     try {
@@ -133,6 +137,13 @@ export default function Dashboard() {
     if (dateRange === 'custom') return { from: customFrom, to: customTo }
     return computeDateRange(dateRange)
   }, [dateRange, customFrom, customTo])
+
+  // Filter country data
+  const countryData = useMemo(() => {
+    const data = stats?.country_breakdown || [];
+    if (excludeIndia) return data.filter(d => d.country?.toLowerCase() !== 'india');
+    return data;
+  }, [stats?.country_breakdown, excludeIndia]);
 
   /* ── Load all distinct location names for filter ── */
   useEffect(() => {
@@ -206,16 +217,9 @@ export default function Dashboard() {
     {
       label:'Duplicates', value: ov.duplicate_leads?.toLocaleString(),
       icon: AlertTriangle, color:'#ef4444',
-      sub: 'Re-uploaded leads',
-      onClick: () => drillTo({ is_duplicate: 1 }),
-      tip: 'Click to view duplicate leads'
-    },
-    {
-      label:'Re-uploaded', value: ov.duplicate_leads?.toLocaleString(),
-      icon: Repeat, color:'#f97316',
       sub: 'Same phone, new batch',
       onClick: () => drillTo({ is_duplicate: 1 }),
-      tip: 'Click to view re-uploaded leads'
+      tip: 'Click to view duplicate leads'
     },
     {
       label:'Active Users', value: ov.total_users?.toLocaleString(),
@@ -223,14 +227,7 @@ export default function Dashboard() {
       sub: 'Licensed team members',
       onClick: null,
       tip: null
-    },
-    {
-      label:'Online Team', value: ov.total_users?.toLocaleString(),
-      icon: Activity, color:'#8b5cf6',
-      sub: 'Active team size',
-      onClick: null,
-      tip: null
-    },
+    }
   ]
 
   return (
@@ -345,7 +342,7 @@ export default function Dashboard() {
                   <Icon size={22} color={item.color}/>
                 </div>
                 <div className="stat-content">
-                  <div className="stat-value" style={{ color: item.color }}>{item.value ?? '–'}</div>
+                  <div className="stat-value" style={{ color: 'var(--text-primary)' }}>{item.value ?? '–'}</div>
                   <div className="stat-label">{item.label}</div>
                   <div className="stat-sub">{item.sub}</div>
                 </div>
@@ -379,39 +376,41 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
 
-          {/* Location Distribution Pie Chart — preserved exactly */}
-          <div className="card">
-            <div className="section-title"><MapPin size={18} color="var(--accent)"/> Location Distribution
-              <span style={{ fontSize:'0.72rem', color:'var(--text-muted)', fontWeight:400, marginLeft:6 }}>(global)</span>
+          {/* Location Distribution Pie Chart — hidden if location is selected */}
+          {!selectedLocation && (
+            <div className="card">
+              <div className="section-title"><MapPin size={18} color="var(--accent)"/> Location Distribution
+                <span style={{ fontSize:'0.72rem', color:'var(--text-muted)', fontWeight:400, marginLeft:6 }}>(global)</span>
+              </div>
+              {(stats?.location_breakdown || []).length === 0
+                ? <div className="empty-state"><p>No location data yet. Set locations in Project Manager.</p></div>
+                : <ResponsiveContainer width="100%" height={240}>
+                    <PieChart>
+                      <Pie
+                        data={stats.location_breakdown}
+                        dataKey="count"
+                        nameKey="location"
+                        cx="50%" cy="50%"
+                        outerRadius={75}
+                        label={(entry) => entry.location ? `${entry.location} (${((entry.count / stats.location_breakdown.reduce((s,r)=>s+Number(r.count),0))*100).toFixed(0)}%)` : ''}
+                        labelLine
+                        onClick={e => drillTo({ location: e.location })}
+                        style={{ cursor:'pointer' }}
+                      >
+                        {stats.location_breakdown.map((_, i) => (
+                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text-primary)', fontSize:12 }}
+                        formatter={(val) => [val + ' leads']}
+                      />
+                      <Legend wrapperStyle={{ fontSize:'0.73rem', color:'var(--text-muted)' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+              }
             </div>
-            {(stats?.location_breakdown || []).length === 0
-              ? <div className="empty-state"><p>No location data yet. Set locations in Project Manager.</p></div>
-              : <ResponsiveContainer width="100%" height={240}>
-                  <PieChart>
-                    <Pie
-                      data={stats.location_breakdown}
-                      dataKey="count"
-                      nameKey="location"
-                      cx="50%" cy="50%"
-                      outerRadius={75}
-                      label={(entry) => entry.location ? `${entry.location} (${((entry.count / stats.location_breakdown.reduce((s,r)=>s+Number(r.count),0))*100).toFixed(0)}%)` : ''}
-                      labelLine
-                      onClick={e => drillTo({ location: e.location })}
-                      style={{ cursor:'pointer' }}
-                    >
-                      {stats.location_breakdown.map((_, i) => (
-                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text-primary)', fontSize:12 }}
-                      formatter={(val) => [val + ' leads']}
-                    />
-                    <Legend wrapperStyle={{ fontSize:'0.73rem', color:'var(--text-muted)' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-            }
-          </div>
+          )}
 
           {/* Recent Batches — preserved exactly */}
           <div className="card">
@@ -471,18 +470,17 @@ export default function Dashboard() {
               emptyMsg="No NRI data available"
             />
             <ChartWidget
-              title="Location City Distribution" Icon={MapPin}
-              data={stats?.city_breakdown || []} nameKey="city" countKey="count"
-              chartType={cityChart} setChartType={setCityChart}
-              onItemClick={name => drillTo({ location: name })}
-              emptyMsg="No city data — upload leads with a City/Location column"
-            />
-            <ChartWidget
               title="Country Distribution" Icon={Globe}
-              data={stats?.country_breakdown || []} nameKey="country" countKey="count"
+              data={countryData} nameKey="country" countKey="count"
               chartType={countryChart} setChartType={setCountryChart}
               onItemClick={name => drillTo({ country: name })}
               emptyMsg="No country data available"
+              headerExtra={
+                <label style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', color: 'var(--text-muted)' }}>
+                  <input type="checkbox" checked={excludeIndia} onChange={e => setExcludeIndia(e.target.checked)} />
+                  Exclude India
+                </label>
+              }
             />
             <ChartWidget
               title="Device Distribution" Icon={Smartphone}
