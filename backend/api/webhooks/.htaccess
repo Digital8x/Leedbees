@@ -1,5 +1,8 @@
-# backend/api/webhooks/.htaccess
-# Security: IP Whitelisting for Webhook Platforms
+# Allow dashboard access to settings and logs (Protected by Auth inside PHP)
+# Also allow google_sheets.php as it uses Token Auth instead of IP Whitelisting
+<FilesMatch "^(settings|logs|verify|google_sheets)\.php$">
+  Require all granted
+</FilesMatch>
 
 <RequireAny>
   # Meta IP ranges
