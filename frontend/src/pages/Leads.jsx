@@ -318,11 +318,14 @@ export default function Leads() {
             {projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
           </select>
         )}
-        {isAdmin && locations.length > 0 && (
-          <select className="form-select" style={{ flex:'0 0 120px', fontSize:'0.78rem', padding:'4px 6px' }} value={location}
+        {isAdmin && project && (
+          <select className="form-select" style={{ flex:'0 0 140px', fontSize:'0.78rem', padding:'4px 6px' }} value={location}
             onChange={e => { setLocation(e.target.value); setPage(1) }}>
             <option value="">All Locations</option>
-            {locations.map(l => <option key={l.id} value={l.location}>{l.location}</option>)}
+            {locations.length === 0
+              ? <option disabled>No locations — add in Project Manager</option>
+              : locations.map(l => <option key={l.id} value={l.location}>{l.location}</option>)
+            }
           </select>
         )}
         <select className="form-select" style={{ flex:'0 0 118px', fontSize:'0.78rem', padding:'4px 6px' }} value={device}

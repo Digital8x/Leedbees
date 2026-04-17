@@ -105,8 +105,8 @@ export default function Dashboard() {
                       nameKey="location"
                       cx="50%" cy="50%"
                       outerRadius={75}
-                      label={({ location, percent }) => `${location} ${(percent*100).toFixed(0)}%`}
-                      labelLine={false}
+                      label={(entry) => entry.location ? `${entry.location} (${((entry.count / stats.location_breakdown.reduce((s,r)=>s+Number(r.count),0))*100).toFixed(0)}%)` : ''}
+                      labelLine={true}
                     >
                       {stats.location_breakdown.map((_, i) => (
                         <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
