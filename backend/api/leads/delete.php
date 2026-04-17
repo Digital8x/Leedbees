@@ -26,6 +26,30 @@ $project = Validator::sanitizeString($body['project'] ?? null, 100) ?: '';
 
 $pdo = Database::getConnection();
 
+/**
+ * Cleanup: removes project_locations and projects master rows
+ * for any project_name that has zero active (non-deleted) leads.
+ * Safe — only deletes mapping/master rows, never touches leads themselves.
+ */
+function cleanupOrphanProjects(\PDO $pdo): void {
+    // 1. Remove from project_locations where project has no active leads
+    $pdo->exec(
+        "DELETE FROM project_locations
+         WHERE project_name NOT IN (
+             SELECT DISTINCT project FROM leads
+             WHERE project IS NOT NULL AND project != '' AND deleted_at IS NULL
+         )"
+    );
+    // 2. Remove from projects master table where project has no active leads
+    $pdo->exec(
+        "DELETE FROM projects
+         WHERE name NOT IN (
+             SELECT DISTINCT project FROM leads
+             WHERE project IS NOT NULL AND project != '' AND deleted_at IS NULL
+         )"
+    );
+}
+
 // --- PROJECT-WISE SOFT DELETE ---
 if ($mode === 'project') {
     if ($project === '') Response::error('Project name required.');
@@ -34,6 +58,7 @@ if ($mode === 'project') {
     $count = $stmt->rowCount();
     Auth::logActivity($pdo, (int)$user['id'], $user['name'], 'Lead Delete',
         "Project-wise delete: {$count} leads from '{$project}'.");
+    cleanupOrphanProjects($pdo);
     Response::success("{$count} leads deleted from project '{$project}'.", ['deleted' => $count]);
 }
 
@@ -44,6 +69,7 @@ if ($mode === 'purge_all') {
     $count = $stmt->rowCount();
     Auth::logActivity($pdo, (int)$user['id'], $user['name'], 'Lead Purge',
         "Permanently purged {$count} leads from trash.");
+    cleanupOrphanProjects($pdo);
     Response::success("{$count} leads permanently deleted.", ['deleted' => $count]);
 }
 
@@ -64,6 +90,7 @@ if ($mode === 'purge') {
     $count = $stmt->rowCount();
     Auth::logActivity($pdo, (int)$user['id'], $user['name'], 'Lead Purge',
         "Permanently purged {$count} lead(s) from trash.");
+    cleanupOrphanProjects($pdo);
     Response::success("{$count} lead(s) permanently deleted.", ['deleted' => $count]);
 }
 
@@ -73,4 +100,6 @@ $stmt->execute(array_values($ids));
 $count = $stmt->rowCount();
 Auth::logActivity($pdo, (int)$user['id'], $user['name'], 'Lead Delete',
     "{$count} lead(s) moved to trash.");
+// Note: soft-delete (trash) only hides leads — cleanup runs on purge, not soft-delete.
+// This keeps project visible while leads are in trash (recoverable).
 Response::success("{$count} lead(s) moved to trash.", ['deleted' => $count]);

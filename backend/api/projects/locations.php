@@ -25,17 +25,21 @@ if ($method === 'GET') {
 
     // Mode A: all distinct locations — for independent Location filter dropdown
     if (!empty($_GET['all_locations'])) {
-        // Only return locations whose projects currently have active (non-deleted) leads.
-        // This prevents ghost locations from showing when a project's leads are all deleted.
+        // Return distinct locations that have active leads AND non-empty/non-whitespace names.
         $stmt = $pdo->query(
-            "SELECT DISTINCT pl.location
+            "SELECT DISTINCT TRIM(pl.location) AS location
              FROM project_locations pl
              INNER JOIN leads l ON l.project = pl.project_name
                                 AND l.deleted_at IS NULL
-             WHERE pl.location IS NOT NULL AND pl.location != ''
-             ORDER BY pl.location ASC"
+             WHERE pl.location IS NOT NULL
+               AND TRIM(pl.location) != ''
+               AND CHAR_LENGTH(TRIM(pl.location)) > 0
+             ORDER BY TRIM(pl.location) ASC"
         );
-        Response::success('OK', ['locations' => $stmt->fetchAll(\PDO::FETCH_COLUMN)]);
+        // Extra PHP-level guard: strip any null/blank values that slipped through
+        $raw = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+        $locations = array_values(array_filter($raw, fn($v) => is_string($v) && trim($v) !== ''));
+        Response::success('OK', ['locations' => $locations]);
         return;
     }
 
