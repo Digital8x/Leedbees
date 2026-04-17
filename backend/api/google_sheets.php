@@ -3,9 +3,9 @@
 
 declare(strict_types=1);
 
-require_once dirname(__DIR__, 2) . '/config/database.php';
-require_once dirname(__DIR__, 2) . '/core/WebhookProcessor.php';
-require_once __DIR__ . '/verify.php';
+require_once dirname(__DIR__) . '/config/database.php';
+require_once dirname(__DIR__) . '/core/WebhookProcessor.php';
+require_once dirname(__DIR__) . '/utils/Encryption.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Allow: POST');
@@ -35,10 +35,8 @@ $stmt = $pdo->prepare("SELECT * FROM webhook_sources WHERE platform = 'google' A
 $stmt->execute();
 $sources = $stmt->fetchAll();
 
-$matchedSource = null;
-require_once dirname(__DIR__, 2) . '/utils/Encryption.php';
-
-foreach ($sources as $source) {
+// 3. Authenticate using Security Token
+$providedToken = $_SERVER['HTTP_AUTHORIZATION'] ?? $data['security_token'] ?? '';
     if ($source['verify_token'] === $providedToken) {
         $matchedSource = $source;
         break;
