@@ -31,13 +31,16 @@ $isDup       = isset($_GET['is_duplicate']) ? (int)$_GET['is_duplicate'] : null;
 $isNri       = isset($_GET['is_nri'])       ? (int)$_GET['is_nri']       : null;
 $assignee    = Validator::asInt($_GET['assigned_to'] ?? null, -1);
 if ($assignee === -1) $assignee = null;
-$project     = Validator::sanitizeString($_GET['project']  ?? null);
-$location    = Validator::sanitizeString($_GET['location']  ?? null);
-$device      = Validator::sanitizeString($_GET['device']    ?? null);
-$dateFrom    = Validator::sanitizeString($_GET['date_from'] ?? null);
-$dateTo      = Validator::sanitizeString($_GET['date_to'] ?? null);
-$showDeleted = ($_GET['show_deleted'] ?? '') === '1';
-$autoOnly    = ($_GET['auto_imported'] ?? '') === '1';
+$project       = Validator::sanitizeString($_GET['project']       ?? null);
+$location      = Validator::sanitizeString($_GET['location']      ?? null);
+$device        = Validator::sanitizeString($_GET['device']        ?? null);
+$country       = Validator::sanitizeString($_GET['country']       ?? null);
+$dateFrom      = Validator::sanitizeString($_GET['date_from']     ?? null);
+$dateTo        = Validator::sanitizeString($_GET['date_to']       ?? null);
+$showDeleted   = ($_GET['show_deleted']    ?? '') === '1';
+$autoOnly      = ($_GET['auto_imported']   ?? '') === '1';
+$assignedOnly  = ($_GET['assigned_only']   ?? '') === '1';
+$unassignedOnly= ($_GET['unassigned_only'] ?? '') === '1';
 
 // Sort
 $allowedSorts = ['name' => 'l.name', 'assigned' => 'u.name', 'date' => 'l.created_at', 'id' => 'l.id'];
@@ -93,10 +96,13 @@ if ($location !== '') {
     $bindings[] = trim($location);
     $bindings[] = trim($location);
 }
-if ($device   !== '') { $where .= ' AND l.device LIKE ?'; $bindings[] = "%{$device}%"; }
-if ($dateFrom !== '') { $where .= ' AND DATE(l.created_at) >= ?'; $bindings[] = $dateFrom; }
-if ($dateTo !== '') { $where .= ' AND DATE(l.created_at) <= ?'; $bindings[] = $dateTo; }
-if ($autoOnly) { $where .= ' AND l.auto_imported = 1'; }
+if ($device        !== '') { $where .= ' AND l.device LIKE ?'; $bindings[] = "%{$device}%"; }
+if ($country       !== '') { $where .= ' AND l.country = ?';  $bindings[] = $country; }
+if ($dateFrom      !== '') { $where .= ' AND DATE(l.created_at) >= ?'; $bindings[] = $dateFrom; }
+if ($dateTo        !== '') { $where .= ' AND DATE(l.created_at) <= ?'; $bindings[] = $dateTo; }
+if ($autoOnly)             { $where .= ' AND l.auto_imported = 1'; }
+if ($assignedOnly)         { $where .= ' AND l.assigned_to IS NOT NULL'; }
+if ($unassignedOnly)       { $where .= ' AND l.assigned_to IS NULL'; }
 
 // Count + Data — both wrapped so any SQL failure returns a clean JSON error
 try {

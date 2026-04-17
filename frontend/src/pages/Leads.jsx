@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useLocation as useRouterLocation } from 'react-router-dom'
 import {
   getLeads, uploadLeadsPreview, confirmUpload, updateFeedback, uploadFeedback,
   getTimeline, deleteLeads, mergeLeads, getProjects, getUsers, getAllLocations,
@@ -72,6 +73,8 @@ export default function Leads() {
   const [isNri, setIsNri]           = useState(false)
   const [showDuplicates, setShowDuplicates] = useState(false)
   const [showDeleted, setShowDeleted]       = useState(false)
+  const [assignedOnly, setAssignedOnly]         = useState(false)
+  const [unassignedOnly, setUnassignedOnly]     = useState(false)
 
   // Sort
   const [sortBy, setSortBy]   = useState('date')
@@ -98,24 +101,43 @@ export default function Leads() {
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [merging, setMerging]             = useState(false)
 
-  /* ── Load leads ──────────────────────────────────── */
+  /* ── Load leads ──────────────────────────────────── */  /* ── Drill-down from Dashboard navigation ── */
+  const routerLocation = useRouterLocation()
+  useEffect(() => {
+    const d = routerLocation.state?.drilldown
+    if (!d) return
+    if (d.is_duplicate)    setShowDuplicates(true)
+    if (d.is_nri === 1)    setIsNri(true)
+    if (d.project)         { setProject(d.project);  setPage(1) }
+    if (d.device)          { setDevice(d.device);    setPage(1) }
+    if (d.location)        { setLocation(d.location); setPage(1) }
+    if (d.status)          { setStatus(d.status);    setPage(1) }
+    if (d.country)         { setPage(1) /* country filter applied via params below */ }
+    if (d.assigned_only)   setAssignedOnly(true)
+    if (d.unassigned_only) setUnassignedOnly(true)
+    // Store country for params (need a state slot)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Country from drill-down (own state) ── */
+  const [drillCountry, setDrillCountry] = useState('')
+  useEffect(() => {
+    const d = routerLocation.state?.drilldown
+    if (d?.country) setDrillCountry(d.country)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const loadLeads = useCallback(async () => {
     setLoading(true)
     try {
-      // When a location is selected, we filter leads by project names of that location.
-      // Backend /leads/list.php already accepts ?location= which maps to l.city — but
-      // our mapping is through project_locations, so we pass it as a dedicated param
-      // and also pass the project filter if set.
       const params = { page, limit, search, status, project, device,
         sort_by: sortBy, sort_dir: sortDir }
-      // Pass location param — backend uses it to filter via city column,
-      // but via project_locations join for accuracy
-      if (location)       params.location    = location
-      if (isNri)          params.is_nri      = 1
-      if (showDuplicates) params.is_duplicate = 1
-      if (showDeleted)    params.show_deleted = 1
-      if (dateFrom)       params.date_from   = dateFrom
-      if (dateTo)         params.date_to     = dateTo
+      if (location)        params.location      = location
+      if (isNri)           params.is_nri        = 1
+      if (showDuplicates)  params.is_duplicate  = 1
+      if (showDeleted)     params.show_deleted  = 1
+      if (dateFrom)        params.date_from     = dateFrom
+      if (dateTo)          params.date_to       = dateTo
+      if (assignedOnly)    params.assigned_only = 1
+      if (unassignedOnly)  params.unassigned_only = 1
+      if (drillCountry)    params.country       = drillCountry
       const res = await getLeads(params)
       const data = res.data?.data || {}
       setLeads(Array.isArray(data.leads) ? data.leads : [])
@@ -124,7 +146,7 @@ export default function Leads() {
       setSelected([])
     } catch { toast.error('Failed to load leads.') }
     setLoading(false)
-  }, [page, limit, search, status, project, location, device, isNri, showDuplicates, showDeleted, dateFrom, dateTo, sortBy, sortDir])
+  }, [page, limit, search, status, project, location, device, isNri, showDuplicates, showDeleted, dateFrom, dateTo, sortBy, sortDir, assignedOnly, unassignedOnly, drillCountry])
 
   useEffect(() => { loadLeads() }, [loadLeads])
 
