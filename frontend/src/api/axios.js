@@ -32,6 +32,9 @@ export const login = (email, password) =>
 export const getLeads = (params) =>
   api.get('/leads/list.php', { params })
 
+export const getDevices = () =>
+  api.get('/filters/devices.php')
+
 // Download: pass export_ids as comma string for selection-wise
 export const downloadLeads = (params) =>
   api.get('/leads/download.php', { params, responseType: 'blob' })

@@ -3,7 +3,7 @@ import { useLocation as useRouterLocation } from 'react-router-dom'
 import {
   getLeads, uploadLeadsPreview, confirmUpload, updateFeedback, uploadFeedback,
   getTimeline, deleteLeads, mergeLeads, getProjects, getUsers, getAllLocations,
-  triggerDownload, downloadLeads
+  triggerDownload, downloadLeads, getDevices
 } from '../api/axios.js'
 import toast from 'react-hot-toast'
 import {
@@ -84,6 +84,7 @@ export default function Leads() {
   const [allLocations, setAllLocations] = useState([])   // all distinct location names
   const [projects, setProjects]         = useState([])   // projects scoped to current location (or all)
   const [users, setUsers]               = useState([])
+  const [devicesList, setDevicesList]   = useState([])
 
   // Upload
   const [previewData, setPreviewData] = useState(null)
@@ -169,6 +170,7 @@ export default function Leads() {
   useEffect(() => {
     loadAllLocations()
     loadProjects(null)  // load all active-lead projects initially
+    getDevices().then(r => setDevicesList(r.data?.data?.devices || [])).catch(()=>{})
     if (isAdmin) getUsers().then(r => setUsers(r.data.data.users || [])).catch(() => {})
   }, [isAdmin, loadAllLocations, loadProjects])
 
@@ -180,13 +182,24 @@ export default function Leads() {
 
   /* ── Upload step 1 ───────────────────────────────── */
   const handleFileChange = async (e) => {
-    const file = e.target.files[0]; if (!file) return
+    const files = Array.from(e.target.files); if (!files.length) return
     setUploading(true)
     try {
-      const fd = new FormData(); fd.append('file', file)
-      const res = await uploadLeadsPreview(fd)
-      const d   = res.data.data
-      setPreviewData(d); setProjName(d.hidden_values?.[0] || ''); setReferUrl('')
+      const allPreviews = []
+      for (const file of files) {
+        const fd = new FormData(); fd.append('file', file)
+        const res = await uploadLeadsPreview(fd)
+        allPreviews.push({ ...res.data.data, filename: file.name })
+      }
+      const aggregated = {
+        previews: allPreviews,
+        total_rows: allPreviews.reduce((s, p) => s + p.total_rows, 0),
+        hidden_values: [...new Set(allPreviews.flatMap(p => p.hidden_values || []))],
+        preview: allPreviews.flatMap(p => p.preview || []).slice(0, 20),
+        refer_detected: allPreviews.some(p => p.refer_detected),
+        files_count: files.length
+      }
+      setPreviewData(aggregated); setProjName(aggregated.hidden_values?.[0] || ''); setReferUrl('')
     } catch (err) { toast.error(err.response?.data?.message || 'Upload failed.') }
     setUploading(false); e.target.value = ''
   }
@@ -195,12 +208,28 @@ export default function Leads() {
   const handleConfirmUpload = async () => {
     if (!projName.trim()) { toast.error('Project Name is required.'); return }
     setConfirming(true)
-    try {
-      const res = await confirmUpload({ parse_id: previewData.parse_id, project_name: projName.trim(), refer_url: referUrl.trim() })
-      const d = res.data.data
-      toast.success(`✅ ${d.new} new leads saved! ${d.duplicates} duplicates.`)
-      setPreviewData(null); loadLeads(); loadProjects(location || null); loadAllLocations()
-    } catch (err) { toast.error(err.response?.data?.message || 'Confirm failed.') }
+    let totalNew = 0, totalDups = 0, failed = 0;
+    
+    // Process sequentially so one failure doesn't break the rest
+    for (const p of previewData.previews) {
+      try {
+        const res = await confirmUpload({ parse_id: p.parse_id, project_name: projName.trim(), refer_url: referUrl.trim() })
+        const d = res.data.data
+        totalNew += (d.new || 0); totalDups += (d.duplicates || 0);
+      } catch (err) {
+        toast.error(`Confirmation failed for ${p.filename}.`)
+        failed++;
+      }
+    }
+    
+    if (totalNew > 0 || totalDups > 0) {
+      toast.success(`✅ ${totalNew} leads imported! ${totalDups} duplicates.`);
+    }
+    if (failed > 0) {
+      toast.error(`${failed} file(s) failed to import.`);
+    }
+    
+    setPreviewData(null); loadLeads(); loadProjects(location || null); loadAllLocations();
     setConfirming(false)
   }
 
@@ -332,7 +361,7 @@ export default function Leads() {
             <>
               <label className="btn btn-primary btn-sm" style={{ cursor:'pointer', fontSize:'0.78rem' }}>
                 <Upload size={13} /> {uploading ? 'Parsing…' : 'Upload'}
-                <input type="file" accept=".xlsx,.xls,.csv" hidden onChange={handleFileChange} disabled={uploading} />
+                <input type="file" accept=".xlsx,.xls,.csv" hidden onChange={handleFileChange} disabled={uploading} multiple />
               </label>
               <label className="btn btn-secondary btn-sm" style={{ cursor:'pointer', fontSize:'0.78rem' }} title="Re-upload exported sheet with ID+Status+Remarks">
                 <RefreshCcw size={13} /> Feedback Sync
@@ -398,7 +427,8 @@ export default function Leads() {
         {/* DEVICE */}
         <select className="form-select" style={{ flex:'0 0 118px', fontSize:'0.78rem', padding:'4px 6px' }} value={device}
           onChange={e => { setDevice(e.target.value); setPage(1) }}>
-          {DEVICES.map(d => <option key={d.val} value={d.val}>{d.label}</option>)}
+          <option value="">All Devices</option>
+          {devicesList.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
         </select>
 
         {/* DATE RANGE */}
@@ -469,17 +499,7 @@ export default function Leads() {
             </>
           )}
           {!showDeleted && (
-            <>
-              <select className="form-select" style={{ fontSize:'0.78rem', padding:'3px 6px', width:160 }} id="del-proj-sel" defaultValue="">
-                <option value="">Delete by Project…</option>
-                {projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
-              </select>
-              <button className="btn btn-danger btn-sm" style={{ fontSize:'0.75rem' }} onClick={() => {
-                const s = document.getElementById('del-proj-sel').value
-                if (!s) { toast.error('Select a project.'); return }
-                setDeleteConfirm({ mode:'project', project: s })
-              }}><Trash2 size={12}/> Del All</button>
-            </>
+            <></>
           )}
           {showDeleted && (
             <button className="btn btn-danger btn-sm" style={{ fontSize:'0.75rem' }} onClick={() => setDeleteConfirm({ mode:'purge_all' })}>
@@ -622,7 +642,7 @@ export default function Leads() {
         <div className="modal-overlay">
           <div className="modal modal-lg">
             <div className="modal-header">
-              <h3>📤 Upload Preview — {previewData.total_rows} rows</h3>
+              <h3>📤 Upload Preview — {previewData.files_count > 1 ? `${previewData.files_count} files` : '1 file'} ({previewData.total_rows} rows)</h3>
               <button className="modal-close" onClick={() => setPreviewData(null)}><X size={18}/></button>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>

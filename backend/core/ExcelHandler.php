@@ -85,6 +85,17 @@ class ExcelHandler
 
         // Device
         'device'         => 'device',
+        'browser device' => 'device',
+        'user device'    => 'device',
+        'platform'       => 'device',
+        'source device'  => 'device',
+
+        // NRI
+        'nri'            => 'is_nri',
+        'is nri'         => 'is_nri',
+        'is_nri'         => 'is_nri',
+        'lead_nri'       => 'is_nri',
+        'lead nri'       => 'is_nri',
 
         // Status
         'status'         => 'status',
@@ -94,6 +105,8 @@ class ExcelHandler
         'created_time'   => 'created_time',
         'createdat'      => 'created_time',
         'created at'     => 'created_time',
+        'lead date'      => 'created_time',
+        'date created'   => 'created_time',
     ];
 
     /**
@@ -109,7 +122,7 @@ class ExcelHandler
         $map = [
             'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
             'xls'  => ['application/vnd.ms-excel'],
-            'csv'  => ['text/csv', 'application/csv']
+            'csv'  => ['text/csv', 'application/csv', 'text/plain']
         ];
 
         if (!isset($map[$ext])) {
@@ -118,6 +131,13 @@ class ExcelHandler
 
         if (!in_array($mime, $map[$ext], true)) {
             throw new \Exception("File content mismatch: The extension .$ext does not match the detected MIME type ($mime).");
+        }
+
+        if ($ext === 'csv' && $mime === 'text/plain') {
+            $sample = @file_get_contents($filePath, false, null, 0, 512);
+            if ($sample && !str_contains($sample, ',') && !str_contains($sample, ';')) {
+                throw new \Exception("File content mismatch: The file is pure text and does not appear to be a valid CSV.");
+            }
         }
 
         if ($ext === 'csv') {

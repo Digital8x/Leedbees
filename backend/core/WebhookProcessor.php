@@ -62,9 +62,11 @@ class WebhookProcessor
                 } elseif (filter_var($ipAddress, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
                     // IPv6: Mask the interface ID (keep first 8 bytes aka /64)
                     $binIp = inet_pton($ipAddress);
-                    if ($binIp) {
+                    if ($binIp !== false) {
                         $maskedBin = substr($binIp, 0, 8) . str_repeat("\x00", 8);
                         $ipAddress = inet_ntop($maskedBin);
+                    } else {
+                        $ipAddress = null;
                     }
                 }
             }
@@ -89,6 +91,17 @@ class WebhookProcessor
             // Extract Consent
             $hasUserConsent = isset($leadData['has_user_consent']) ? (int)$leadData['has_user_consent'] : 0;
 
+            // Normalized Device
+            $rawDevice = trim((string)($leadData['device'] ?? ''));
+            if ($rawDevice !== '') {
+                $dev = preg_replace('/\s*(?:\||\bon\b|\-|\/)\s*/i', ' / ', $rawDevice);
+                $dev = ucwords(strtolower($dev));
+                $dev = str_ireplace(['iphone', 'ipad', 'macos', 'ios'], ['iPhone', 'iPad', 'macOS', 'iOS'], $dev);
+                $device = $dev;
+            } else {
+                $device = 'Unknown Device';
+            }
+
             // 3. Prepare row for DuplicateDetector
             $row = [
                 'phone'            => $leadData['phone']      ?? '',
@@ -97,14 +110,14 @@ class WebhookProcessor
                 'source'           => $platformName,
                 'project'          => $leadData['project']    ?? 'AUTO_IMPORT',
                 'campaign'         => $leadData['campaign']   ?? '',
-                'device'           => $leadData['device']     ?? null,
+                'device'           => $device,
                 'country'          => $leadData['country']    ?? null,
                 'ip_address'       => $ipAddress,
                 'refer_url'        => $referUrl,
                 'has_user_consent' => $hasUserConsent,
                 'retention_date'   => $retentionDate,
                 'created_at'       => $createdAt,
-                'is_nri'           => 0
+                'is_nri'           => $leadData['is_nri']     ?? 0
             ];
 
             // 3. Process via existing detector

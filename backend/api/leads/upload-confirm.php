@@ -66,22 +66,47 @@ try {
             $row['refer_url'] = $referUrl;
         }
 
-        // NRI detection
-        $phone   = trim((string)($row['phone'] ?? ''));
-        $country = trim((string)($row['country'] ?? ''));
-        $row['is_nri'] = detectNri($phone, $country) ? 1 : 0;
+        // NRI detection (Priority: column value > auto-detect)
+        if (isset($row['is_nri']) && $row['is_nri'] !== '') {
+            $nriVal = strtolower(trim((string)$row['is_nri']));
+            $row['is_nri'] = in_array($nriVal, ['yes', 'true', '1', 'on', 'nri', 'y']) ? 1 : 0;
+        } else {
+            $phone   = trim((string)($row['phone'] ?? ''));
+            $country = trim((string)($row['country'] ?? ''));
+            $row['is_nri'] = detectNri($phone, $country) ? 1 : 0;
+        }
+        
+        // Date overriding (from Created Time)
+        if (!empty($row['created_time'])) {
+            $rawDate = trim((string)$row['created_time']);
+            $formats = ['Y-m-d H:i:s', 'Y-m-d H:i', 'Y-m-d', 'd/m/Y H:i:s', 'd/m/Y H:i', 'd/m/Y', 'm/d/Y'];
+            $dt = null;
+            foreach ($formats as $fmt) {
+                $parsed = DateTime::createFromFormat($fmt, $rawDate);
+                $errors = DateTime::getLastErrors();
+                if ($parsed !== false && $errors['error_count'] === 0) {
+                    $dt = $parsed;
+                    break;
+                }
+            }
+            if ($dt) {
+                // Ignore time, save only date portion to align with requested behaviour
+                $row['created_at'] = $dt->format('Y-m-d 00:00:00');
+            }
+        }
 
         // entry_id
         $row['entry_id'] = trim((string)($row['entry_id'] ?? '')) ?: null;
         $row['ip_address'] = trim((string)($row['ip_address'] ?? '')) ?: null;
 
         // Device normalization
-        $rawDevice = strtolower(trim((string)($row['device'] ?? '')));
+        $rawDevice = trim((string)($row['device'] ?? ''));
         if ($rawDevice !== '') {
-            $isSafari = str_contains($rawDevice, 'safari') || str_contains($rawDevice, 'iphone')
-                     || str_contains($rawDevice, 'ios')   || str_contains($rawDevice, 'ipad')
-                     || str_contains($rawDevice, 'mac');
-            $row['device'] = $isSafari ? 'Safari | iPhone' : 'Chrome | Windows';
+            // Unify | - on /
+            $dev = preg_replace('/\s*(?:\||\bon\b|\-|\/)\s*/i', ' / ', $rawDevice);
+            $dev = ucwords(strtolower($dev));
+            $dev = str_ireplace(['iphone', 'ipad', 'macos', 'ios'], ['iPhone', 'iPad', 'macOS', 'iOS'], $dev);
+            $row['device'] = $dev;
         } else {
             $row['device'] = null;
         }

@@ -112,6 +112,11 @@ try {
         elseif (in_array($cleanKey, ['consent', 'user_consent', 'consent_given', 'opt_in'])) {
             $normalized['has_user_consent'] = (in_array(strtolower($val), ['yes', 'true', '1', 'on'])) ? 1 : 0;
         }
+        // NRI Mapping
+        elseif (in_array($cleanKey, ['nri', 'is nri', 'is_nri', 'lead_nri', 'lead nri'])) {
+            $nriVal = strtolower($val);
+            $normalized['is_nri'] = in_array($nriVal, ['yes', 'true', '1', 'on', 'nri', 'y']) ? 1 : 0;
+        }
         // UTM/URL
         elseif (in_array($cleanKey, ['url', 'refer_url', 'source_url', 'page url', 'refer url'])) {
             $normalized['refer_url'] = $val;
@@ -144,7 +149,10 @@ try {
                 }
             }
             if ($parsedDate) {
-                $normalized['created_at'] = $parsedDate;
+                // Keep the exact parsed timestamp for audit and original submission time
+                $normalized['submitted_at'] = $parsedDate;
+                // Strip time for creation consistency if needed, but retaining real time usually preferred
+                $normalized['created_at'] = substr($parsedDate, 0, 10) . ' 00:00:00';
             } else {
                 error_log("Google Sheets Webhook: Unable to parse date '{$val}'.");
             }

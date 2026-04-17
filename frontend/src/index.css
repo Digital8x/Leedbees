@@ -459,3 +459,8 @@ tbody tr.is-duplicate td:first-child { border-left: 3px solid var(--warning); }
   .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
   .page { padding: 16px; }
 }
+
+/* ---- Recharts Tooltip Fix ---- */
+.recharts-tooltip-item {
+  color: #ffffff !important;
+}
