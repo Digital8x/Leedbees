@@ -69,6 +69,24 @@ if ($location) {
     $bindings[] = $location;
 }
 
+// Search filter (phone, name, email, id)
+$search = Validator::sanitizeString($_GET['search'] ?? null);
+if ($search) {
+    $where .= ' AND (l.phone LIKE ? OR l.name LIKE ? OR l.email LIKE ? OR l.id LIKE ?)';
+    $bindings[] = "%{$search}%"; $bindings[] = "%{$search}%";
+    $bindings[] = "%{$search}%"; $bindings[] = "%{$search}%";
+}
+
+// Date range filter
+$dateFrom = Validator::sanitizeString($_GET['date_from'] ?? null);
+$dateTo   = Validator::sanitizeString($_GET['date_to']   ?? null);
+if ($dateFrom) { $where .= ' AND DATE(l.created_at) >= ?'; $bindings[] = $dateFrom; }
+if ($dateTo)   { $where .= ' AND DATE(l.created_at) <= ?'; $bindings[] = $dateTo; }
+
+// Device filter
+$device = Validator::sanitizeString($_GET['device'] ?? null);
+if ($device) { $where .= ' AND l.device LIKE ?'; $bindings[] = "%{$device}%"; }
+
 // NRI filter
 $isNriRaw = $_GET['is_nri'] ?? null;
 if ($isNriRaw !== null) { 
