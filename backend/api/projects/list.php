@@ -56,18 +56,21 @@ elseif ($mode === 'by_location') {
              ORDER BY l.project ASC"
         );
     } else {
-        // Return only projects mapped to this location AND that have active leads
+        // Returns projects that belong to this location via project_locations mapping
+        // OR whose leads have this city value directly — so it works even without setup.
         $stmt = $pdo->prepare(
             "SELECT DISTINCT l.project AS name
              FROM leads l
-             INNER JOIN project_locations pl ON pl.project_name = l.project
-             WHERE pl.location = ?
-               AND l.project   IS NOT NULL
-               AND l.project   != ''
-               AND l.deleted_at IS NULL
+             WHERE l.deleted_at IS NULL
+               AND l.project IS NOT NULL
+               AND l.project != ''
+               AND (
+                   l.project IN (SELECT project_name FROM project_locations WHERE TRIM(location) = ?)
+                   OR TRIM(l.city) = ?
+               )
              ORDER BY l.project ASC"
         );
-        $stmt->execute([$location]);
+        $stmt->execute([trim($location), trim($location)]);
     }
 
     $rows     = $stmt->fetchAll();

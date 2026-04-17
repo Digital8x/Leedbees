@@ -63,11 +63,15 @@ if ($status) { $where .= ' AND l.status = ?'; $bindings[] = $status; }
 $batchId = Validator::sanitizeString($_GET['batch_id'] ?? null);
 if ($batchId) { $where .= ' AND l.first_batch_id = ?'; $bindings[] = $batchId; }
 
-// Location filter via project_locations mapping (project_name → location)
+// Location filter: match via project_locations mapping OR direct city column
 $location = Validator::sanitizeString($_GET['location'] ?? null);
 if ($location) {
-    $where .= ' AND l.project IN (SELECT project_name FROM project_locations WHERE location = ?)';
-    $bindings[] = $location;
+    $where .= ' AND (
+        l.project IN (SELECT project_name FROM project_locations WHERE TRIM(location) = ?)
+        OR TRIM(l.city) = ?
+    )';
+    $bindings[] = trim($location);
+    $bindings[] = trim($location);
 }
 
 // Search filter (phone, name, email, id)

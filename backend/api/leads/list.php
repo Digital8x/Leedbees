@@ -83,10 +83,15 @@ if ($isNri !== null) { $where .= ' AND l.is_nri = ?'; $bindings[] = $isNri; }
 if ($assignee !== null) { $where .= ' AND l.assigned_to = ?'; $bindings[] = $assignee; }
 if ($project  !== '') { $where .= ' AND l.project = ?'; $bindings[] = $project; }
 if ($location !== '') {
-    // Filter by location via project_locations mapping (project → location)
-    // This is more reliable than the city column on individual leads
-    $where .= ' AND l.project IN (SELECT project_name FROM project_locations WHERE location = ?)';
-    $bindings[] = $location;
+    // Match leads by location using BOTH sources:
+    // 1. Leads whose project is mapped to this location via project_locations
+    // 2. Leads that have this value directly in the city column
+    $where .= ' AND (
+        l.project IN (SELECT project_name FROM project_locations WHERE TRIM(location) = ?)
+        OR TRIM(l.city) = ?
+    )';
+    $bindings[] = trim($location);
+    $bindings[] = trim($location);
 }
 if ($device   !== '') { $where .= ' AND l.device LIKE ?'; $bindings[] = "%{$device}%"; }
 if ($dateFrom !== '') { $where .= ' AND DATE(l.created_at) >= ?'; $bindings[] = $dateFrom; }

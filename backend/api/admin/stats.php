@@ -28,9 +28,9 @@ $locationCond = '';
 $locationBindings = [];
 
 if (!empty($locationFilter)) {
-    // Sub-select the project names belonging to this location
-    $locationCond    = " AND project IN (SELECT project_name FROM project_locations WHERE location = ?)";
-    $locationBindings[] = $locationFilter;
+    // Match leads by location via project_locations mapping OR direct city column
+    $locationCond       = " AND (project IN (SELECT project_name FROM project_locations WHERE TRIM(location) = ?) OR TRIM(city) = ?)";
+    $locationBindings   = [trim($locationFilter), trim($locationFilter)];
 }
 
 // ── Overview counts ───────────────────────────────────────────────────────────
@@ -64,8 +64,11 @@ $statusRows = $stStmt->fetchAll();
 
 // ── Per-user stats ────────────────────────────────────────────────────────────
 // Join condition scopes to location if needed
-$userJoinCond = "l.assigned_to = u.id AND l.deleted_at IS NULL" . ($locationCond ? " AND l.project IN (SELECT project_name FROM project_locations WHERE location = ?)" : '');
-$userBindings = $locationFilter ? [$locationFilter] : [];
+$userJoinCond = "l.assigned_to = u.id AND l.deleted_at IS NULL";
+if ($locationFilter) {
+    $userJoinCond .= " AND (l.project IN (SELECT project_name FROM project_locations WHERE TRIM(location) = ?) OR TRIM(l.city) = ?)";
+}
+$userBindings = $locationFilter ? [trim($locationFilter), trim($locationFilter)] : [];
 
 $userStmt = $pdo->prepare(
     "SELECT u.id, u.name, u.role,

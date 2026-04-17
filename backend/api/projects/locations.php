@@ -25,19 +25,29 @@ if ($method === 'GET') {
 
     // Mode A: all distinct locations — for independent Location filter dropdown
     if (!empty($_GET['all_locations'])) {
-        // Return distinct locations that have active leads AND non-empty/non-whitespace names.
+        // UNION: locations from project_locations mapping + distinct city values in leads.
+        // This ensures the dropdown is populated even when project_locations is empty.
         $stmt = $pdo->query(
-            "SELECT DISTINCT TRIM(pl.location) AS location
-             FROM project_locations pl
-             INNER JOIN leads l ON l.project = pl.project_name
-                                AND l.deleted_at IS NULL
-             WHERE pl.location IS NOT NULL
-               AND TRIM(pl.location) != ''
-               AND CHAR_LENGTH(TRIM(pl.location)) > 0
-             ORDER BY TRIM(pl.location) ASC"
+            "SELECT DISTINCT loc FROM (
+                 -- Source 1: named locations from project_locations that have active leads
+                 SELECT TRIM(pl.location) AS loc
+                 FROM project_locations pl
+                 INNER JOIN leads l ON l.project = pl.project_name AND l.deleted_at IS NULL
+                 WHERE pl.location IS NOT NULL AND TRIM(pl.location) != ''
+
+                 UNION
+
+                 -- Source 2: city column from active leads (works without project_locations setup)
+                 SELECT TRIM(l.city) AS loc
+                 FROM leads l
+                 WHERE l.city IS NOT NULL
+                   AND TRIM(l.city) != ''
+                   AND l.deleted_at IS NULL
+             ) AS all_locs
+             WHERE loc IS NOT NULL AND TRIM(loc) != ''
+             ORDER BY loc ASC"
         );
-        // Extra PHP-level guard: strip any null/blank values that slipped through
-        $raw = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+        $raw       = $stmt->fetchAll(\PDO::FETCH_COLUMN);
         $locations = array_values(array_filter($raw, fn($v) => is_string($v) && trim($v) !== ''));
         Response::success('OK', ['locations' => $locations]);
         return;
