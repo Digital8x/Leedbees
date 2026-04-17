@@ -57,11 +57,12 @@ class DuplicateDetector
             return ['action' => 'duplicate', 'lead_id' => $existing['id']];
         } else {
             // --- NEW LEAD ---
+            $createdAt = $row['created_at'] ?? date('Y-m-d H:i:s');
             $stmt = $this->pdo->prepare(
                 "INSERT INTO leads
                     (phone, name, email, city, project, entry_id, refer_url, ip_address, country, device, is_nri,
                      first_source, first_batch_id, status, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', NOW())"
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', ?)"
             );
             $stmt->execute([
                 $phone,
@@ -77,6 +78,7 @@ class DuplicateDetector
                 $isNri,
                 $source  ?: null,
                 $batchId,
+                $createdAt
             ]);
             $leadId = (int)$this->pdo->lastInsertId();
 

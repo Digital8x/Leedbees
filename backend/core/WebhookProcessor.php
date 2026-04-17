@@ -65,6 +65,7 @@ class WebhookProcessor
                 'country'    => $leadData['country']    ?? null,
                 'ip_address' => $leadData['ip_address'] ?? null,
                 'refer_url'  => $leadData['refer_url']  ?? null,
+                'created_at' => $leadData['created_at'] ?? null,
                 'is_nri'     => 0
             ];
 

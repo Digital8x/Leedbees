@@ -88,7 +88,7 @@ try {
             $normalized['email'] = $val;
         }
         // Project/City Mapping
-        elseif (in_array($cleanKey, ['project', 'property', 'location', 'city'])) {
+        elseif (in_array($cleanKey, ['project', 'property', 'location', 'city', 'hidden field'])) {
             $normalized['project'] = $val;
         }
         // Device/Platform Info
@@ -106,10 +106,12 @@ try {
         elseif (in_array($cleanKey, ['url', 'refer_url', 'source_url', 'page url'])) {
             $normalized['refer_url'] = $val;
         }
-        // Date Handling (If we have a valid date in the sheet)
-        elseif ($cleanKey === 'date' || $cleanKey === 'time') {
+        // Date Handling (Improved)
+        elseif (in_array($cleanKey, ['date', 'time', 'timestamp', 'created at'])) {
             $time = strtotime($val);
-            if ($time) $normalized['created_at'] = date('Y-m-d H:i:s', $time);
+            if ($time) {
+                $normalized['created_at'] = date('Y-m-d H:i:s', $time);
+            }
         }
     }
 
