@@ -56,30 +56,35 @@ class DuplicateDetector
 
             return ['action' => 'duplicate', 'lead_id' => $existing['id']];
         } else {
-            // --- NEW LEAD ---
-            $createdAt = $row['created_at'] ?? date('Y-m-d H:i:s');
-            $stmt = $this->pdo->prepare(
-                "INSERT INTO leads
-                    (phone, name, email, city, project, entry_id, refer_url, ip_address, country, device, is_nri,
-                     first_source, first_batch_id, status, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', ?)"
-            );
-            $stmt->execute([
-                $phone,
-                $name    ?: null,
-                $email   ?: null,
-                $city    ?: null,
-                $project ?: null,
-                $entryId,
-                $referUrl,
-                $ipAddr,
-                $country,
-                $device,
-                $isNri,
-                $source  ?: null,
-                $batchId,
-                $createdAt
-            ]);
+        // --- NEW LEAD ---
+        $createdAt     = $row['created_at']    ?? date('Y-m-d H:i:s');
+        $userConsent   = $row['user_consent']  ?? 0;
+        $retentionDate = $row['retention_date'] ?? null;
+
+        $stmt = $this->pdo->prepare(
+            "INSERT INTO leads
+                (phone, name, email, city, project, entry_id, refer_url, ip_address, country, device, is_nri,
+                 first_source, first_batch_id, status, user_consent, retention_date, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', ?, ?, ?)"
+        );
+        $stmt->execute([
+            $phone,
+            $name    ?: null,
+            $email   ?: null,
+            $city    ?: null,
+            $project ?: null,
+            $entryId,
+            $referUrl,
+            $ipAddr,
+            $country,
+            $device,
+            $isNri,
+            $source  ?: null,
+            $batchId,
+            $userConsent,
+            $retentionDate,
+            $createdAt
+        ]);
             $leadId = (int)$this->pdo->lastInsertId();
 
             $this->addLeadSource($leadId, $source, $campaign, $batchId, $uploadedBy);

@@ -96,21 +96,42 @@ try {
             $normalized['device'] = $val;
         }
         // Country/IP
+        // Country/IP Mapping (Compliance: Anonymize or mask PII)
         elseif (in_array($cleanKey, ['country', 'region', 'nationality'])) {
             $normalized['country'] = $val;
         }
         elseif ($cleanKey === 'ip' || $cleanKey === 'ip_address') {
+            /** 
+             * PRIVACY COMPLIANCE: IPs are PII. We only assign the raw value here; 
+             * WebhookProcessor will anonymize it before storage.
+             * Retention Policy: Leads are stored for 365 days by default.
+             */
             $normalized['ip_address'] = $val;
+        }
+        // Consent Mapping
+        elseif (in_array($cleanKey, ['consent', 'user_consent', 'consent_given', 'opt_in'])) {
+            $normalized['user_consent'] = (in_array(strtolower($val), ['yes', 'true', '1', 'on'])) ? 1 : 0;
         }
         // UTM/URL
         elseif (in_array($cleanKey, ['url', 'refer_url', 'source_url', 'page url'])) {
             $normalized['refer_url'] = $val;
         }
-        // Date Handling (Improved)
+        // Date Handling (Robust Parsing: Avoid locale-ambiguous strtotime)
         elseif (in_array($cleanKey, ['date', 'time', 'timestamp', 'created at'])) {
-            $time = strtotime($val);
-            if ($time) {
-                $normalized['created_at'] = date('Y-m-d H:i:s', $time);
+            $formats = ['d/m/Y H:i:s', 'd/m/Y H:i', 'd/m/Y', 'Y-m-d H:i:s', 'Y-m-d', 'm/d/Y'];
+            $parsedDate = null;
+            foreach ($formats as $fmt) {
+                $dt = DateTime::createFromFormat($fmt, $val);
+                if ($dt && $dt->format($fmt) === $val) {
+                    $parsedDate = $dt->format('Y-m-d H:i:s');
+                    break;
+                }
+            }
+            if ($parsedDate) {
+                $normalized['created_at'] = $parsedDate;
+            } else {
+                // If parsing fails, we could log it, but for now we fallback to WebhookProcessor's NOW()
+                error_log("Google Sheets Webhook: Unable to parse date '{$val}' using supported formats.");
             }
         }
     }

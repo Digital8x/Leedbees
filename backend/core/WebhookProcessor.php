@@ -53,20 +53,49 @@ class WebhookProcessor
             // 1. Generate Batch ID
             $batchId = DuplicateDetector::generateBatchId($platformName);
 
-            // 2. Prepare row for DuplicateDetector
+            // 2. Data Minimization & Privacy Hardening
+            // Anonymize IP Address (mask last octet)
+            $ipAddress = $leadData['ip_address'] ?? null;
+            if ($ipAddress) {
+                if (filter_var($ipAddress, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                    $ipAddress = preg_replace('/\.\d+$/', '.0', $ipAddress);
+                } elseif (filter_var($ipAddress, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+                    $ipAddress = substr(bin2hex(inet_pton($ipAddress)), 0, 16) . '::'; // Truncate to /64
+                }
+            }
+
+            // Clean Refer URL (strip query parameters)
+            $referUrl = $leadData['refer_url'] ?? null;
+            if ($referUrl) {
+                $urlParts = parse_url($referUrl);
+                $referUrl = ($urlParts['scheme'] ?? 'http') . '://' . ($urlParts['host'] ?? '');
+                if (isset($urlParts['path'])) $referUrl .= $urlParts['path'];
+            }
+
+            // Calculate Retention Date (Default: 365 days)
+            $retentionDays = 365;
+            $createdAt = $leadData['created_at'] ?? date('Y-m-d H:i:s');
+            $retentionDate = date('Y-m-d H:i:s', strtotime($createdAt . " + $retentionDays days"));
+
+            // Extract Consent
+            $userConsent = isset($leadData['user_consent']) ? (int)$leadData['user_consent'] : 0;
+
+            // 3. Prepare row for DuplicateDetector
             $row = [
-                'phone'      => $leadData['phone']      ?? '',
-                'name'       => $leadData['name']       ?? '',
-                'email'      => $leadData['email']      ?? '',
-                'source'     => $platformName,
-                'project'    => $leadData['project']    ?? 'AUTO_IMPORT',
-                'campaign'   => $leadData['campaign']   ?? '',
-                'device'     => $leadData['device']     ?? null,
-                'country'    => $leadData['country']    ?? null,
-                'ip_address' => $leadData['ip_address'] ?? null,
-                'refer_url'  => $leadData['refer_url']  ?? null,
-                'created_at' => $leadData['created_at'] ?? null,
-                'is_nri'     => 0
+                'phone'          => $leadData['phone']      ?? '',
+                'name'           => $leadData['name']       ?? '',
+                'email'          => $leadData['email']      ?? '',
+                'source'         => $platformName,
+                'project'        => $leadData['project']    ?? 'AUTO_IMPORT',
+                'campaign'       => $leadData['campaign']   ?? '',
+                'device'         => $leadData['device']     ?? null,
+                'country'        => $leadData['country']    ?? null,
+                'ip_address'     => $ipAddress,
+                'refer_url'      => $referUrl,
+                'user_consent'   => $userConsent,
+                'retention_date' => $retentionDate,
+                'created_at'     => $createdAt,
+                'is_nri'         => 0
             ];
 
             // 3. Process via existing detector
