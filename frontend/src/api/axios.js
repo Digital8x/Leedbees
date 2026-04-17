@@ -64,15 +64,28 @@ export const mergeLeads = (ids) =>
   api.post('/leads/merge.php', { ids })
 
 // Projects
-export const getProjects = () =>
-  api.get('/projects/list.php')
+// mode: 'active_leads' (default) | 'master' | 'by_location'
+// For by_location, pass params: { mode: 'by_location', location: 'Bangalore East' }
+export const getProjects = (params) =>
+  api.get('/projects/list.php', { params })
 
 export const saveProject = (data) =>
   api.post('/projects/save.php', data)
 
 // Project Locations
-export const getLocations = (project_name) =>
-  api.get('/projects/locations.php', { params: { project_name } })
+// Get single project's location: getLocations({ project_name: 'X' })
+// Get ALL distinct location names: getLocations({ all_locations: 1 })
+export const getLocations = (paramsOrProjectName) => {
+  // Backwards-compatible: old callers passed a string (project_name)
+  if (typeof paramsOrProjectName === 'string') {
+    return api.get('/projects/locations.php', { params: { project_name: paramsOrProjectName } })
+  }
+  return api.get('/projects/locations.php', { params: paramsOrProjectName })
+}
+
+// Convenience: load all distinct location names for the Location filter dropdown
+export const getAllLocations = () =>
+  api.get('/projects/locations.php', { params: { all_locations: 1 } })
 
 export const saveLocation = (data) =>
   api.post('/projects/locations.php', data)
@@ -94,16 +107,16 @@ export const deleteUser  = (id)   => api.delete('/users/delete.php', { data: { i
 export const distribute = (data) =>
   api.post('/distribution/distribute.php', data)
 
-// Admin
-export const getStats       = ()  => api.get('/admin/stats.php')
-export const getActivityLog = (p) => api.get('/admin/activity-log.php', { params: p })
-export const downloadBackup = ()  => api.post('/admin/backup.php', {}, { responseType: 'blob' })
+// Admin — pass optional params e.g. { location: 'Bangalore East' } to scope dashboard
+export const getStats       = (params) => api.get('/admin/stats.php', { params })
+export const getActivityLog = (p)      => api.get('/admin/activity-log.php', { params: p })
+export const downloadBackup = ()       => api.post('/admin/backup.php', {}, { responseType: 'blob' })
 
 // Webhooks
-export const getWebhookSources = ()     => api.get('/webhooks-admin/settings.php')
-export const saveWebhookSource = (data) => api.post('/webhooks-admin/settings.php', data)
-export const deleteWebhookSource = (id) => api.delete('/webhooks-admin/settings.php', { params: { id } })
-export const getWebhookLogs    = (p)     => api.get('/webhooks-admin/logs.php', { params: p })
+export const getWebhookSources   = ()     => api.get('/webhooks-admin/settings.php')
+export const saveWebhookSource   = (data) => api.post('/webhooks-admin/settings.php', data)
+export const deleteWebhookSource = (id)   => api.delete('/webhooks-admin/settings.php', { params: { id } })
+export const getWebhookLogs      = (p)    => api.get('/webhooks-admin/logs.php', { params: p })
 
 // Helper
 export const triggerDownload = (blob, filename) => {

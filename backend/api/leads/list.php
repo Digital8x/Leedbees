@@ -82,7 +82,12 @@ if ($isDup !== null) { $where .= ' AND l.is_duplicate = ?'; $bindings[] = $isDup
 if ($isNri !== null) { $where .= ' AND l.is_nri = ?'; $bindings[] = $isNri; }
 if ($assignee !== null) { $where .= ' AND l.assigned_to = ?'; $bindings[] = $assignee; }
 if ($project  !== '') { $where .= ' AND l.project = ?'; $bindings[] = $project; }
-if ($location !== '') { $where .= ' AND l.city = ?'; $bindings[] = $location; }
+if ($location !== '') {
+    // Filter by location via project_locations mapping (project → location)
+    // This is more reliable than the city column on individual leads
+    $where .= ' AND l.project IN (SELECT project_name FROM project_locations WHERE location = ?)';
+    $bindings[] = $location;
+}
 if ($device   !== '') { $where .= ' AND l.device LIKE ?'; $bindings[] = "%{$device}%"; }
 if ($dateFrom !== '') { $where .= ' AND DATE(l.created_at) >= ?'; $bindings[] = $dateFrom; }
 if ($dateTo !== '') { $where .= ' AND DATE(l.created_at) <= ?'; $bindings[] = $dateTo; }

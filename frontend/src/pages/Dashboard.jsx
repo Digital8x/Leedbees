@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { getStats } from '../api/axios.js'
-import { Users, Upload, GitBranch, TrendingUp, AlertTriangle, CheckCircle, RefreshCw, MapPin } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+import { getStats, getAllLocations } from '../api/axios.js'
+import { Users, Upload, GitBranch, TrendingUp, AlertTriangle, CheckCircle, RefreshCw, MapPin, X } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
 import toast from 'react-hot-toast'
 
@@ -12,20 +12,31 @@ const STATUS_COLORS = {
 const PIE_COLORS = ['#7c3aed','#06b6d4','#10b981','#f59e0b','#ef4444','#a855f7','#8b5cf6','#34d399','#6b7280','#f97316']
 
 export default function Dashboard() {
-  const [stats, setStats]     = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [stats, setStats]             = useState(null)
+  const [loading, setLoading]         = useState(true)
+  const [allLocations, setAllLocations] = useState([])
+  const [selectedLocation, setSelectedLocation] = useState('')
   const user = JSON.parse(localStorage.getItem('lead8x_user') || '{}')
 
-  const load = async () => {
+  /* ── Load all distinct location names for filter ── */
+  useEffect(() => {
+    getAllLocations()
+      .then(r => setAllLocations(r.data.data.locations || []))
+      .catch(() => setAllLocations([]))
+  }, [])
+
+  /* ── Load stats (re-runs when selectedLocation changes) ── */
+  const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await getStats()
+      const params = selectedLocation ? { location: selectedLocation } : undefined
+      const res = await getStats(params)
       setStats(res.data.data)
     } catch { toast.error('Failed to load dashboard stats.') }
     finally { setLoading(false) }
-  }
+  }, [selectedLocation])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [load])
 
   if (loading) return (
     <div>
@@ -41,10 +52,51 @@ export default function Dashboard() {
       <div className="topbar">
         <h1>Dashboard</h1>
         <div className="topbar-actions">
-          <span style={{color:'var(--text-muted)',fontSize:'0.85rem'}}>Welcome, <strong>{user.name}</strong> · {user.role}</span>
+          <span style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>Welcome, <strong>{user.name}</strong> · {user.role}</span>
+
+          {/* ── Location filter dropdown ── */}
+          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+            <MapPin size={14} color="var(--accent)" />
+            <select
+              className="form-select"
+              style={{ fontSize:'0.82rem', padding:'4px 8px', minWidth:150,
+                borderColor: selectedLocation ? 'var(--primary)' : undefined,
+                fontWeight: selectedLocation ? 600 : undefined }}
+              value={selectedLocation}
+              onChange={e => setSelectedLocation(e.target.value)}
+            >
+              <option value="">All Locations</option>
+              {allLocations.map(loc => (
+                <option key={loc} value={loc}>{loc}</option>
+              ))}
+            </select>
+            {selectedLocation && (
+              <button
+                onClick={() => setSelectedLocation('')}
+                style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', padding:2, display:'flex' }}
+                title="Clear location filter"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
           <button className="btn btn-secondary btn-sm" onClick={load}><RefreshCw size={14}/> Refresh</button>
         </div>
       </div>
+
+      {/* Active location indicator */}
+      {selectedLocation && (
+        <div style={{ padding:'6px 20px', background:'var(--primary-light)', borderBottom:'1px solid var(--border)',
+          display:'flex', alignItems:'center', gap:8, fontSize:'0.8rem', color:'var(--primary)', fontWeight:600 }}>
+          <MapPin size={13} />
+          Showing data for: {selectedLocation}
+          <button onClick={() => setSelectedLocation('')}
+            style={{ background:'none', border:'none', cursor:'pointer', color:'var(--primary)', padding:0, marginLeft:4, display:'flex' }}>
+            <X size={12} />
+          </button>
+        </div>
+      )}
 
       <div className="page">
         {/* KPI cards */}
@@ -74,7 +126,9 @@ export default function Dashboard() {
         <div className="grid grid-2 mb-6">
           {/* Status Breakdown Chart */}
           <div className="card">
-            <div className="section-title"><TrendingUp size={18} color="var(--accent)"/> Status Breakdown</div>
+            <div className="section-title"><TrendingUp size={18} color="var(--accent)"/> Status Breakdown
+              {selectedLocation && <span style={{ fontSize:'0.72rem', color:'var(--text-muted)', fontWeight:400, marginLeft:6 }}>({selectedLocation})</span>}
+            </div>
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={stats?.status_breakdown || []} barSize={30}>
                 <XAxis dataKey="status" tick={{fill:'var(--text-muted)',fontSize:11}} tickLine={false} axisLine={false}/>
@@ -92,11 +146,13 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
 
-          {/* Location Distribution Pie Chart */}
+          {/* Location Distribution Pie Chart — always global view */}
           <div className="card">
-            <div className="section-title"><MapPin size={18} color="var(--accent)"/> Location Distribution</div>
+            <div className="section-title"><MapPin size={18} color="var(--accent)"/> Location Distribution
+              <span style={{ fontSize:'0.72rem', color:'var(--text-muted)', fontWeight:400, marginLeft:6 }}>(global)</span>
+            </div>
             {(stats?.location_breakdown || []).length === 0
-              ? <div className="empty-state"><p>No location data yet.</p></div>
+              ? <div className="empty-state"><p>No location data yet. Set locations in Project Manager.</p></div>
               : <ResponsiveContainer width="100%" height={240}>
                   <PieChart>
                     <Pie
@@ -116,7 +172,7 @@ export default function Dashboard() {
                       contentStyle={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text-primary)', fontSize:12 }}
                       formatter={(val) => [val + ' leads']}
                     />
-                    <Legend wrapperStyle={{ fontSize: '0.73rem', color: 'var(--text-muted)' }} />
+                    <Legend wrapperStyle={{ fontSize:'0.73rem', color:'var(--text-muted)' }} />
                   </PieChart>
                 </ResponsiveContainer>
             }
@@ -124,7 +180,9 @@ export default function Dashboard() {
 
           {/* Recent Batches */}
           <div className="card">
-            <div className="section-title"><Upload size={18} color="var(--accent)"/> Recent Uploads</div>
+            <div className="section-title"><Upload size={18} color="var(--accent)"/> Recent Uploads
+              {selectedLocation && <span style={{ fontSize:'0.72rem', color:'var(--text-muted)', fontWeight:400, marginLeft:6 }}>({selectedLocation})</span>}
+            </div>
             {(stats?.recent_batches || []).length === 0
               ? <div className="empty-state"><p>No batches yet.</p></div>
               : <div className="table-wrapper">
@@ -149,7 +207,9 @@ export default function Dashboard() {
 
         {/* Team Performance */}
         <div className="card">
-          <div className="section-title"><CheckCircle size={18} color="var(--accent)"/> Team Performance</div>
+          <div className="section-title"><CheckCircle size={18} color="var(--accent)"/> Team Performance
+            {selectedLocation && <span style={{ fontSize:'0.72rem', color:'var(--text-muted)', fontWeight:400, marginLeft:6 }}>({selectedLocation})</span>}
+          </div>
           <div className="table-wrapper">
             <table>
               <thead>

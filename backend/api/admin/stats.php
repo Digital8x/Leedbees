@@ -1,5 +1,6 @@
 <?php
-// backend/api/admin/stats.php — v2 (excludes deleted/trash leads from all stats)
+// backend/api/admin/stats.php — v3
+// Supports optional ?location=X to scope all stats to a single location's projects.
 
 declare(strict_types=1);
 
@@ -7,6 +8,7 @@ require_once dirname(__DIR__, 3) . '/vendor/autoload.php';
 require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__, 2) . '/utils/Response.php';
 require_once dirname(__DIR__, 2) . '/core/Auth.php';
+require_once dirname(__DIR__, 2) . '/utils/Validator.php';
 
 Response::setCorsHeaders();
 $user = Auth::requireAuth(['Admin', 'Manager']);
@@ -15,51 +17,93 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') Response::error('Method not allowed', 
 
 $pdo = Database::getConnection();
 
-// Active leads only (exclude trash/deleted)
+// Optional location filter
+$locationFilter = Validator::sanitizeString($_GET['location'] ?? null, 150);
+
+// Base condition: active (non-deleted) leads only
 $active = "deleted_at IS NULL";
 
-$totalLeads     = (int)$pdo->query("SELECT COUNT(*) FROM leads WHERE $active")->fetchColumn();
-$duplicateLeads = (int)$pdo->query("SELECT COUNT(*) FROM leads WHERE is_duplicate = 1 AND $active")->fetchColumn();
-$assignedLeads  = (int)$pdo->query("SELECT COUNT(*) FROM leads WHERE assigned_to IS NOT NULL AND $active")->fetchColumn();
-$totalUsers     = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE is_active = 1")->fetchColumn();
+// If a location is selected, build an extra condition that restricts to projects of that location
+$locationCond = '';
+$locationBindings = [];
 
-// Status breakdown (active only)
-$statusRows = $pdo->query(
-    "SELECT status, COUNT(*) AS count FROM leads WHERE $active GROUP BY status ORDER BY count DESC"
-)->fetchAll();
+if (!empty($locationFilter)) {
+    // Sub-select the project names belonging to this location
+    $locationCond    = " AND project IN (SELECT project_name FROM project_locations WHERE location = ?)";
+    $locationBindings[] = $locationFilter;
+}
 
-// Per-user lead counts (active leads only)
-$userStats = $pdo->query(
+// ── Overview counts ───────────────────────────────────────────────────────────
+$baseWhere    = "WHERE $active" . $locationCond;
+$baseBindings = $locationBindings;
+
+$countStmt = $pdo->prepare("SELECT COUNT(*) FROM leads $baseWhere");
+$countStmt->execute($baseBindings);
+$totalLeads = (int)$countStmt->fetchColumn();
+
+$dupStmt = $pdo->prepare("SELECT COUNT(*) FROM leads $baseWhere AND is_duplicate = 1");
+$dupStmt->execute($baseBindings);
+$duplicateLeads = (int)$dupStmt->fetchColumn();
+
+$assignStmt = $pdo->prepare("SELECT COUNT(*) FROM leads $baseWhere AND assigned_to IS NOT NULL");
+$assignStmt->execute($baseBindings);
+$assignedLeads = (int)$assignStmt->fetchColumn();
+
+$totalUsers = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE is_active = 1")->fetchColumn();
+
+// ── Status breakdown ──────────────────────────────────────────────────────────
+$stStmt = $pdo->prepare(
+    "SELECT status, COUNT(*) AS count
+     FROM leads
+     $baseWhere
+     GROUP BY status
+     ORDER BY count DESC"
+);
+$stStmt->execute($baseBindings);
+$statusRows = $stStmt->fetchAll();
+
+// ── Per-user stats ────────────────────────────────────────────────────────────
+// Join condition scopes to location if needed
+$userJoinCond = "l.assigned_to = u.id AND l.deleted_at IS NULL" . ($locationCond ? " AND l.project IN (SELECT project_name FROM project_locations WHERE location = ?)" : '');
+$userBindings = $locationFilter ? [$locationFilter] : [];
+
+$userStmt = $pdo->prepare(
     "SELECT u.id, u.name, u.role,
             SUM(CASE WHEN l.id IS NOT NULL THEN 1 ELSE 0 END) AS total_leads,
             SUM(CASE WHEN l.status = 'Interested' THEN 1 ELSE 0 END) AS interested,
             SUM(CASE WHEN l.status = 'Booked' THEN 1 ELSE 0 END) AS booked
      FROM users u
-     LEFT JOIN leads l ON l.assigned_to = u.id AND l.deleted_at IS NULL
+     LEFT JOIN leads l ON $userJoinCond
      WHERE u.is_active = 1
      GROUP BY u.id, u.name, u.role
      ORDER BY total_leads DESC"
-)->fetchAll();
+);
+$userStmt->execute($userBindings);
+$userStats = $userStmt->fetchAll();
 
-// Recent batches (active leads only)
-$batches = $pdo->query(
+// ── Recent batches ────────────────────────────────────────────────────────────
+$batchStmt = $pdo->prepare(
     "SELECT first_batch_id AS batch_id, first_source AS source,
             COUNT(*) AS total,
             SUM(is_duplicate) AS duplicates,
             MIN(created_at) AS uploaded_at
      FROM leads
-     WHERE first_batch_id IS NOT NULL AND $active
+     $baseWhere
+       AND first_batch_id IS NOT NULL
      GROUP BY first_batch_id, first_source
      ORDER BY uploaded_at DESC
      LIMIT 10"
-)->fetchAll();
+);
+$batchStmt->execute($baseBindings);
+$batches = $batchStmt->fetchAll();
 
-// Location breakdown (city column, active leads only, for pie chart)
+// ── Location breakdown (always global — pie chart context) ────────────────────
+// Uses project_locations to aggregate by named location (not raw city column)
 $locationRows = $pdo->query(
-    "SELECT city AS location, COUNT(*) AS count
-     FROM leads
-     WHERE city IS NOT NULL AND city != '' AND $active
-     GROUP BY city
+    "SELECT pl.location, COUNT(l.id) AS count
+     FROM project_locations pl
+     INNER JOIN leads l ON l.project = pl.project_name AND l.deleted_at IS NULL
+     GROUP BY pl.location
      ORDER BY count DESC
      LIMIT 15"
 )->fetchAll();

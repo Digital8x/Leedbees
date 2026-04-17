@@ -62,9 +62,12 @@ if ($status) { $where .= ' AND l.status = ?'; $bindings[] = $status; }
 $batchId = Validator::sanitizeString($_GET['batch_id'] ?? null);
 if ($batchId) { $where .= ' AND l.first_batch_id = ?'; $bindings[] = $batchId; }
 
-// Location (city) filter
+// Location filter via project_locations mapping (project_name → location)
 $location = Validator::sanitizeString($_GET['location'] ?? null);
-if ($location) { $where .= ' AND l.city = ?'; $bindings[] = $location; }
+if ($location) {
+    $where .= ' AND l.project IN (SELECT project_name FROM project_locations WHERE location = ?)';
+    $bindings[] = $location;
+}
 
 // NRI filter
 $isNriRaw = $_GET['is_nri'] ?? null;

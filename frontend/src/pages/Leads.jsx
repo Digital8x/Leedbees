@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   getLeads, uploadLeadsPreview, confirmUpload, updateFeedback, uploadFeedback,
-  getTimeline, deleteLeads, mergeLeads, getProjects, getUsers, getLocations,
+  getTimeline, deleteLeads, mergeLeads, getProjects, getUsers, getAllLocations,
   triggerDownload, downloadLeads
 } from '../api/axios.js'
 import toast from 'react-hot-toast'
@@ -66,7 +66,6 @@ export default function Leads() {
   const [status, setStatus]         = useState('')
   const [project, setProject]       = useState('')
   const [location, setLocation]     = useState('')
-  const [locations, setLocations2]  = useState([])
   const [device, setDevice]         = useState('')
   const [dateFrom, setDateFrom]     = useState('')
   const [dateTo, setDateTo]         = useState('')
@@ -79,8 +78,9 @@ export default function Leads() {
   const [sortDir, setSortDir] = useState('DESC')
 
   // Reference data
-  const [projects, setProjects] = useState([])
-  const [users, setUsers]       = useState([])
+  const [allLocations, setAllLocations] = useState([])   // all distinct location names
+  const [projects, setProjects]         = useState([])   // projects scoped to current location (or all)
+  const [users, setUsers]               = useState([])
 
   // Upload
   const [previewData, setPreviewData] = useState(null)
@@ -102,13 +102,20 @@ export default function Leads() {
   const loadLeads = useCallback(async () => {
     setLoading(true)
     try {
-      const params = { page, limit, search, status, project, location, device,
+      // When a location is selected, we filter leads by project names of that location.
+      // Backend /leads/list.php already accepts ?location= which maps to l.city — but
+      // our mapping is through project_locations, so we pass it as a dedicated param
+      // and also pass the project filter if set.
+      const params = { page, limit, search, status, project, device,
         sort_by: sortBy, sort_dir: sortDir }
-      if (isNri)          params.is_nri = 1
+      // Pass location param — backend uses it to filter via city column,
+      // but via project_locations join for accuracy
+      if (location)       params.location    = location
+      if (isNri)          params.is_nri      = 1
       if (showDuplicates) params.is_duplicate = 1
       if (showDeleted)    params.show_deleted = 1
-      if (dateFrom)       params.date_from = dateFrom
-      if (dateTo)         params.date_to   = dateTo
+      if (dateFrom)       params.date_from   = dateFrom
+      if (dateTo)         params.date_to     = dateTo
       const res = await getLeads(params)
       setLeads(res.data.data.leads)
       setTotal(res.data.data.total)
@@ -120,24 +127,33 @@ export default function Leads() {
 
   useEffect(() => { loadLeads() }, [loadLeads])
 
-  const loadProjects = useCallback(() => {
-    getProjects().then(r => setProjects(r.data.data.projects || [])).catch(() => {})
+  /* ── Load ALL distinct location names once (for Location filter) ── */
+  const loadAllLocations = useCallback(() => {
+    getAllLocations()
+      .then(r => setAllLocations(r.data.data.locations || []))
+      .catch(() => setAllLocations([]))
   }, [])
 
-  useEffect(() => {
-    loadProjects()
-    if (isAdmin) getUsers().then(r => setUsers(r.data.data.users || [])).catch(() => {})
-  }, [isAdmin, loadProjects])
+  /* ── Load project names — scoped to selected location or all ── */
+  const loadProjects = useCallback((loc) => {
+    const params = loc ? { mode: 'by_location', location: loc } : undefined
+    getProjects(params)
+      .then(r => setProjects(r.data.data.projects || []))
+      .catch(() => setProjects([]))
+  }, [])
 
-  // Load locations when project filter changes
+  /* ── On mount: load locations + all projects (no location selected yet) ── */
   useEffect(() => {
-    setLocation('')
-    if (project) {
-      getLocations(project).then(r => setLocations2(r.data.data.locations || [])).catch(() => setLocations2([]))
-    } else {
-      setLocations2([])
-    }
-  }, [project])
+    loadAllLocations()
+    loadProjects(null)  // load all active-lead projects initially
+    if (isAdmin) getUsers().then(r => setUsers(r.data.data.users || [])).catch(() => {})
+  }, [isAdmin, loadAllLocations, loadProjects])
+
+  /* ── When location filter changes: refresh project list ── */
+  useEffect(() => {
+    setProject('')  // reset project selection whenever location changes
+    loadProjects(location || null)
+  }, [location, loadProjects])
 
   /* ── Upload step 1 ───────────────────────────────── */
   const handleFileChange = async (e) => {
@@ -160,7 +176,7 @@ export default function Leads() {
       const res = await confirmUpload({ parse_id: previewData.parse_id, project_name: projName.trim(), refer_url: referUrl.trim() })
       const d = res.data.data
       toast.success(`✅ ${d.new} new leads saved! ${d.duplicates} duplicates.`)
-      setPreviewData(null); loadLeads(); loadProjects()
+      setPreviewData(null); loadLeads(); loadProjects(location || null); loadAllLocations()
     } catch (err) { toast.error(err.response?.data?.message || 'Confirm failed.') }
     setConfirming(false)
   }
@@ -191,7 +207,15 @@ export default function Leads() {
   }
   const handleDownloadAll = async () => {
     try {
-      const params = { search, status, project, location, ...(isNri ? { is_nri: 1 } : {}) }
+      // Pass all active filters so export matches exactly what is shown on screen
+      const params = {
+        search, status, project,
+        ...(location  ? { location }        : {}),
+        ...(device    ? { device }           : {}),
+        ...(isNri     ? { is_nri: 1 }        : {}),
+        ...(dateFrom  ? { date_from: dateFrom } : {}),
+        ...(dateTo    ? { date_to: dateTo }     : {}),
+      }
       const res = await downloadLeads(params)
       triggerDownload(res.data, 'leads_export.xlsx')
     } catch { toast.error('Export failed.') }
@@ -246,7 +270,8 @@ export default function Leads() {
     try {
       await deleteLeads(deleteConfirm)
       toast.success(['purge','purge_all'].includes(deleteConfirm.mode) ? 'Permanently deleted.' : 'Moved to trash.')
-      setDeleteConfirm(null); setSelected([]); loadLeads(); loadProjects()
+      setDeleteConfirm(null); setSelected([]); loadLeads()
+      loadProjects(location || null); loadAllLocations()
     } catch { toast.error('Delete failed.') }
   }
 
@@ -297,46 +322,69 @@ export default function Leads() {
         </div>
       </div>
 
-      {/* ── FILTER BAR (2 compact rows) ── */}
+      {/* ── FILTER BAR ── */}
       <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:8 }}>
-        {/* Row 1 */}
+
+        {/* SEARCH */}
         <div className="search-box" style={{ flex:'1 1 160px', minWidth:140 }}>
           <Search size={13} />
           <input className="form-input" style={{ fontSize:'0.8rem', padding:'5px 8px' }}
             placeholder="ID, phone, name…" value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }} />
         </div>
+
+        {/* STATUS */}
         <select className="form-select" style={{ flex:'0 0 120px', fontSize:'0.78rem', padding:'4px 6px' }} value={status}
           onChange={e => { setStatus(e.target.value); setPage(1) }}>
           <option value="">All Statuses</option>
           {STATUSES.map(s => <option key={s}>{s}</option>)}
         </select>
+
+        {/* ── LOCATION FILTER — always visible and independent ── */}
         {isAdmin && (
-          <select className="form-select" style={{ flex:'0 0 120px', fontSize:'0.78rem', padding:'4px 6px' }} value={project}
-            onChange={e => { setProject(e.target.value); setPage(1) }}>
-            <option value="">All Projects</option>
+          <select
+            className="form-select"
+            style={{ flex:'0 0 150px', fontSize:'0.78rem', padding:'4px 6px',
+              borderColor: location ? 'var(--primary)' : undefined,
+              fontWeight: location ? 600 : undefined }}
+            value={location}
+            onChange={e => { setLocation(e.target.value); setPage(1) }}
+            title="Filter by Location"
+          >
+            <option value="">📍 All Locations</option>
+            {allLocations.map(loc => (
+              <option key={loc} value={loc}>{loc}</option>
+            ))}
+          </select>
+        )}
+
+        {/* ── PROJECT NAME FILTER — dynamically scoped to selected location ── */}
+        {isAdmin && (
+          <select
+            className="form-select"
+            style={{ flex:'0 0 140px', fontSize:'0.78rem', padding:'4px 6px',
+              borderColor: project ? 'var(--primary)' : undefined }}
+            value={project}
+            onChange={e => { setProject(e.target.value); setPage(1) }}
+          >
+            <option value="">{location ? `All (${projects.length})` : 'All Projects'}</option>
             {projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
           </select>
         )}
-        {isAdmin && project && (
-          <select className="form-select" style={{ flex:'0 0 140px', fontSize:'0.78rem', padding:'4px 6px' }} value={location}
-            onChange={e => { setLocation(e.target.value); setPage(1) }}>
-            <option value="">All Locations</option>
-            {locations.length === 0
-              ? <option disabled>No locations — add in Project Manager</option>
-              : locations.map(l => <option key={l.id} value={l.location}>{l.location}</option>)
-            }
-          </select>
-        )}
+
+        {/* DEVICE */}
         <select className="form-select" style={{ flex:'0 0 118px', fontSize:'0.78rem', padding:'4px 6px' }} value={device}
           onChange={e => { setDevice(e.target.value); setPage(1) }}>
           {DEVICES.map(d => <option key={d.val} value={d.val}>{d.label}</option>)}
         </select>
+
+        {/* DATE RANGE */}
         <input type="date" className="form-input" style={{ flex:'0 0 120px', fontSize:'0.78rem', padding:'4px 6px' }}
           value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }} title="From date" />
         <input type="date" className="form-input" style={{ flex:'0 0 120px', fontSize:'0.78rem', padding:'4px 6px' }}
           value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }} title="To date" />
-        {/* Flag buttons */}
+
+        {/* FLAG BUTTONS */}
         <button className={`btn btn-sm ${isNri ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize:'0.75rem' }}
           onClick={() => { setIsNri(v => !v); setPage(1) }}><Globe size={12} /> NRI</button>
         <button className={`btn btn-sm ${showDuplicates ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize:'0.75rem' }}
@@ -347,12 +395,42 @@ export default function Leads() {
             <Trash2 size={12} /> {showDeleted ? 'Trash View' : 'Trash'}
           </button>
         )}
+
+        {/* PAGE SIZE */}
         <select className="form-select" style={{ flex:'0 0 90px', fontSize:'0.78rem', padding:'4px 6px' }} value={limit}
           onChange={e => { setLimit(parseInt(e.target.value)); setPage(1) }}>
           {PAGE_SIZES.map(n => <option key={n} value={n}>{n}/pg</option>)}
         </select>
+
+        {/* RESET */}
         <button className="btn btn-secondary btn-sm" style={{ fontSize:'0.75rem' }} onClick={resetFilters} title="Reset filters">↺ Reset</button>
       </div>
+
+      {/* ── ACTIVE FILTER INDICATOR ── */}
+      {(location || project) && (
+        <div style={{ display:'flex', gap:6, marginBottom:8, flexWrap:'wrap' }}>
+          {location && (
+            <span style={{ display:'inline-flex', alignItems:'center', gap:4, background:'var(--primary-light)',
+              color:'var(--primary)', borderRadius:12, padding:'2px 10px', fontSize:'0.75rem', fontWeight:600 }}>
+              <MapPin size={11} /> {location}
+              <button onClick={() => { setLocation(''); setPage(1) }}
+                style={{ background:'none', border:'none', cursor:'pointer', color:'var(--primary)', padding:0, marginLeft:2, display:'flex' }}>
+                <X size={11} />
+              </button>
+            </span>
+          )}
+          {project && (
+            <span style={{ display:'inline-flex', alignItems:'center', gap:4, background:'var(--primary-light)',
+              color:'var(--primary)', borderRadius:12, padding:'2px 10px', fontSize:'0.75rem', fontWeight:600 }}>
+              {project}
+              <button onClick={() => { setProject(''); setPage(1) }}
+                style={{ background:'none', border:'none', cursor:'pointer', color:'var(--primary)', padding:0, marginLeft:2, display:'flex' }}>
+                <X size={11} />
+              </button>
+            </span>
+          )}
+        </div>
+      )}
 
       {/* ── BULK / ADMIN TOOLS ── */}
       {isAdmin && (

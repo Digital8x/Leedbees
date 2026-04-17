@@ -1,8 +1,10 @@
 <?php
 // backend/api/projects/locations.php
-// GET: list locations for a project
-// POST: add a location to a project
-// DELETE: remove a location
+//
+// GET  ?all_locations=1           → list all distinct locations (for Location filter dropdown)
+// GET  ?project_name=X            → get the single location for one project
+// POST {project_name, location}   → set / update location for a project (one per project)
+// DELETE ?id=N                    → remove a project's location mapping
 
 declare(strict_types=1);
 
@@ -15,48 +17,79 @@ require_once dirname(__DIR__, 2) . '/utils/Validator.php';
 Response::setCorsHeaders();
 $user = Auth::requireAuth(['Admin', 'Manager']);
 
-$pdo = Database::getConnection();
+$pdo    = Database::getConnection();
 $method = $_SERVER['REQUEST_METHOD'];
 
+// ── GET ──────────────────────────────────────────────────────────────────────
 if ($method === 'GET') {
+
+    // Mode A: all distinct locations — for independent Location filter dropdown
+    if (!empty($_GET['all_locations'])) {
+        $stmt = $pdo->query(
+            "SELECT DISTINCT location
+             FROM project_locations
+             WHERE location IS NOT NULL AND location != ''
+             ORDER BY location ASC"
+        );
+        Response::success('OK', ['locations' => $stmt->fetchAll(\PDO::FETCH_COLUMN)]);
+        return; // explicit stop — prevent fall-through to Mode B error path
+    }
+
+    // Mode B: single project's location
     $projectName = Validator::sanitizeString($_GET['project_name'] ?? null, 150);
-    if (empty($projectName)) Response::error('project_name is required', 400);
+    if (empty($projectName)) Response::error('project_name or all_locations is required', 400);
 
     $stmt = $pdo->prepare(
         "SELECT id, project_name, location, created_at
          FROM project_locations
          WHERE project_name = ?
-         ORDER BY location ASC"
+         LIMIT 1"
     );
     $stmt->execute([$projectName]);
-    Response::success('OK', ['locations' => $stmt->fetchAll()]);
+    $row = $stmt->fetch();
+    // Always return an array for consistency; empty array = no location set yet
+    Response::success('OK', ['locations' => $row ? [$row] : []]);
 }
 
+// ── POST (set / update) ───────────────────────────────────────────────────────
 elseif ($method === 'POST') {
     $body        = json_decode(file_get_contents('php://input'), true);
     $projectName = Validator::sanitizeString($body['project_name'] ?? null, 150);
-    $location    = Validator::sanitizeString($body['location'] ?? null, 150);
+    $location    = Validator::sanitizeString($body['location']     ?? null, 150);
 
     if (empty($projectName) || empty($location)) {
         Response::error('project_name and location are required', 400);
     }
 
+    // ONE location per project: INSERT or UPDATE (upsert)
     $stmt = $pdo->prepare(
-        "INSERT IGNORE INTO project_locations (project_name, location) VALUES (?, ?)"
+        "INSERT INTO project_locations (project_name, location)
+         VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE location = VALUES(location)"
     );
     $stmt->execute([$projectName, $location]);
-    $newId = (int)$pdo->lastInsertId();
 
-    Response::success('Location added.', ['id' => $newId, 'project_name' => $projectName, 'location' => $location]);
+    // lastInsertId() returns 0 on UPDATE path of ON DUPLICATE KEY UPDATE,
+    // so always fetch the actual row id after the upsert.
+    $idStmt = $pdo->prepare("SELECT id FROM project_locations WHERE project_name = ? LIMIT 1");
+    $idStmt->execute([$projectName]);
+    $newId = (int)($idStmt->fetchColumn() ?: 0);
+
+    Response::success('Location saved.', [
+        'id'           => $newId,
+        'project_name' => $projectName,
+        'location'     => $location,
+    ]);
 }
 
+// ── DELETE ────────────────────────────────────────────────────────────────────
 elseif ($method === 'DELETE') {
     $id = (int)($_GET['id'] ?? 0);
     if ($id <= 0) Response::error('Valid id required', 400);
 
     $stmt = $pdo->prepare("DELETE FROM project_locations WHERE id = ?");
     $stmt->execute([$id]);
-    Response::success('Location deleted.');
+    Response::success('Location removed.');
 }
 
 else {
