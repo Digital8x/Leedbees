@@ -21,36 +21,41 @@ if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
     exit('Invalid JSON');
 }
 
-// 1. Initial Logging
-$pdo = Database::getConnection();
-$processor = new WebhookProcessor($pdo);
-$logId = $processor->logPayload('google_sheets', $data, $_SERVER['HTTP_X_HUB_SIGNATURE_256'] ?? 'Token Auth');
-
-// 2. Authenticate using Security Token
-$providedToken = $_SERVER['HTTP_AUTHORIZATION'] ?? $data['security_token'] ?? '';
-unset($data['security_token']); // Remove token from internal data log
-
-// Check if any source matches this token
-$stmt = $pdo->prepare("SELECT * FROM webhook_sources WHERE platform = 'google' AND is_active = 1");
-$stmt->execute();
-$sources = $stmt->fetchAll();
-
-$matchedSource = null;
-foreach ($sources as $source) {
-    if ($source['verify_token'] === $providedToken) {
-        $matchedSource = $source;
-        break;
-    }
-}
-
-if (!$matchedSource) {
-    $processor->updateLogStatus($logId, 'failed', null, "Invalid Security Token");
-    http_response_code(401);
-    exit('Unauthorized: Invalid security token');
-}
-
-// 3. Process the lead
+// 1. Initial Logging & Setup
 try {
+    $pdo = Database::getConnection();
+    $processor = new WebhookProcessor($pdo);
+    $logId = $processor->logPayload('google_sheets', $data, $_SERVER['HTTP_X_HUB_SIGNATURE_256'] ?? 'Token Auth');
+} catch (Throwable $e) {
+    error_log("Webhook Initial Error: " . $e->getMessage());
+    http_response_code(500);
+    exit("Server Error: Unable to log payload");
+}
+
+try {
+    // 2. Authenticate using Security Token
+    $providedToken = $_SERVER['HTTP_AUTHORIZATION'] ?? $data['security_token'] ?? '';
+    unset($data['security_token']); // Remove token from internal data log
+
+    // Check if any source matches this token
+    $stmt = $pdo->prepare("SELECT * FROM webhook_sources WHERE platform = 'google' AND is_active = 1");
+    $stmt->execute();
+    $sources = $stmt->fetchAll();
+
+    $matchedSource = null;
+    foreach ($sources as $source) {
+        if ($source['verify_token'] === $providedToken) {
+            $matchedSource = $source;
+            break;
+        }
+    }
+
+    if (!$matchedSource) {
+        $processor->updateLogStatus($logId, 'failed', null, "Invalid Security Token");
+        http_response_code(401);
+        exit('Unauthorized: Invalid security token');
+    }
+
     // 3. Smart Mapping
     // We try to find common headers in the flat JSON from Sheets
     $normalized = [
@@ -85,14 +90,15 @@ try {
     }
 
     if (empty($normalized['phone'])) {
-        throw new Exception("Missing required field: Phone");
+        throw new Exception("Missing required field: Phone. Ensure your sheet has a 'Phone' or 'Number' column.");
     }
 
+    // 4. Process Lead
     $processor->processLead($logId, $normalized, 'Google Sheets');
     echo "OK";
 
 } catch (Throwable $e) {
-    $processor->updateLogStatus($logId, 'failed');
+    $processor->updateLogStatus($logId, 'failed', null, $e->getMessage());
     error_log("Google Sheets Webhook Error: " . $e->getMessage());
     http_response_code(500);
     exit("Internal Server Error: " . $e->getMessage());
