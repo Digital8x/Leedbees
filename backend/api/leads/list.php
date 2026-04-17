@@ -98,32 +98,30 @@ if ($dateFrom !== '') { $where .= ' AND DATE(l.created_at) >= ?'; $bindings[] = 
 if ($dateTo !== '') { $where .= ' AND DATE(l.created_at) <= ?'; $bindings[] = $dateTo; }
 if ($autoOnly) { $where .= ' AND l.auto_imported = 1'; }
 
-// Count
-$countStmt = $pdo->prepare("SELECT COUNT(*) FROM leads l LEFT JOIN users u ON l.assigned_to = u.id {$where}");
-$countStmt->execute($bindings);
-$total = (int)$countStmt->fetchColumn();
-
-// Data
-$sql = "
-    SELECT l.id, l.entry_id, l.name, l.phone, l.email, l.project, l.status,
-           l.country, l.ip_address, l.device, l.refer_url, l.remark,
-           l.is_nri, l.is_duplicate, l.first_batch_id,
-           l.created_at, l.updated_at, l.deleted_at,
-           l.assigned_to, u.name AS assigned_to_name,
-           la.assigned_at
-    FROM leads l
-    LEFT JOIN users u ON l.assigned_to = u.id
-    LEFT JOIN (
-        SELECT lead_id, MAX(assigned_at) AS assigned_at
-        FROM lead_assignments GROUP BY lead_id
-    ) la ON la.lead_id = l.id
-    {$where}
-    ORDER BY {$sortBy} {$sortDir}
-    LIMIT {$limit} OFFSET {$offset}
-";
-
+// Count + Data — both wrapped so any SQL failure returns a clean JSON error
 try {
-    $stmt = $pdo->prepare($sql);
+    $countStmt = $pdo->prepare("SELECT COUNT(*) FROM leads l LEFT JOIN users u ON l.assigned_to = u.id {$where}");
+    $countStmt->execute($bindings);
+    $total = (int)$countStmt->fetchColumn();
+
+    $sql = "
+        SELECT l.id, l.entry_id, l.name, l.phone, l.email, l.project, l.status,
+               l.country, l.ip_address, l.device, l.refer_url, l.remark,
+               l.is_nri, l.is_duplicate, l.first_batch_id,
+               l.created_at, l.updated_at, l.deleted_at,
+               l.assigned_to, u.name AS assigned_to_name,
+               la.assigned_at
+        FROM leads l
+        LEFT JOIN users u ON l.assigned_to = u.id
+        LEFT JOIN (
+            SELECT lead_id, MAX(assigned_at) AS assigned_at
+            FROM lead_assignments GROUP BY lead_id
+        ) la ON la.lead_id = l.id
+        {$where}
+        ORDER BY {$sortBy} {$sortDir}
+        LIMIT {$limit} OFFSET {$offset}
+    ";
+    $stmt  = $pdo->prepare($sql);
     $stmt->execute($bindings);
     $leads = $stmt->fetchAll();
 } catch (\PDOException $e) {

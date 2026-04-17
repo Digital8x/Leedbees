@@ -117,9 +117,10 @@ export default function Leads() {
       if (dateFrom)       params.date_from   = dateFrom
       if (dateTo)         params.date_to     = dateTo
       const res = await getLeads(params)
-      setLeads(res.data.data.leads)
-      setTotal(res.data.data.total)
-      setTotalPages(res.data.data.total_pages)
+      const data = res.data?.data || {}
+      setLeads(Array.isArray(data.leads) ? data.leads : [])
+      setTotal(Number(data.total) || 0)
+      setTotalPages(Number(data.total_pages) || 1)
       setSelected([])
     } catch { toast.error('Failed to load leads.') }
     setLoading(false)
