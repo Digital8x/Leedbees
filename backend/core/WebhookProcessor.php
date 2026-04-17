@@ -104,11 +104,11 @@ class WebhookProcessor
         }
     }
 
-    private function updateLogStatus(int $logId, string $status, ?int $leadId = null): void
+    public function updateLogStatus(int $logId, string $status, ?int $leadId = null, ?string $errorMessage = null): void
     {
         $stmt = $this->pdo->prepare(
-            "UPDATE webhook_log SET status = ?, lead_id = ? WHERE id = ?"
+            "UPDATE webhook_log SET status = ?, lead_id = ?, error_message = ? WHERE id = ?"
         );
-        $stmt->execute([$status, $leadId, $logId]);
+        $stmt->execute([$status, $leadId, $errorMessage, $logId]);
     }
 }

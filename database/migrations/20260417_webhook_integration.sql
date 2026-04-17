@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS webhook_log (
   signature     VARCHAR(255),
   status        ENUM('received','processed','failed','duplicate'),
   lead_id       BIGINT NULL,
+  error_message TEXT NULL,
   created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_platform (platform),
   INDEX idx_status (status),
