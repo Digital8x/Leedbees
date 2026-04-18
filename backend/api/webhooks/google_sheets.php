@@ -3,9 +3,9 @@
 
 declare(strict_types=1);
 
-require_once dirname(__DIR__) . '/config/database.php';
-require_once dirname(__DIR__) . '/core/WebhookProcessor.php';
-require_once dirname(__DIR__) . '/utils/Encryption.php';
+require_once dirname(__DIR__, 2) . '/config/database.php';
+require_once dirname(__DIR__, 2) . '/core/WebhookProcessor.php';
+require_once dirname(__DIR__, 2) . '/utils/Encryption.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Allow: POST');

@@ -3,9 +3,9 @@
 
 declare(strict_types=1);
 
-require_once dirname(__DIR__) . '/config/database.php';
-require_once dirname(__DIR__) . '/config/webhook_config.php';
-require_once dirname(__DIR__) . '/core/WebhookProcessor.php';
+require_once dirname(__DIR__, 2) . '/config/database.php';
+require_once dirname(__DIR__, 2) . '/config/webhook_config.php';
+require_once dirname(__DIR__, 2) . '/core/WebhookProcessor.php';
 require_once __DIR__ . '/verify.php';
 
 // 1. Handle Verification (GET)
