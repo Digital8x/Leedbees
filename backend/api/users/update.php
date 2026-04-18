@@ -49,6 +49,9 @@ if ($isActive !== null) {
     $updates[] = 'is_active = ?'; $vals[] = $isActive;
 }
 
+// Auto-verify users when updated by an Admin to bypass email verification block for internal staff
+$updates[] = 'email_verified_at = COALESCE(email_verified_at, NOW())';
+
 if (empty($updates)) Response::error('No valid fields to update.');
 
 $vals[] = $targetId;

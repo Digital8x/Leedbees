@@ -49,7 +49,7 @@ if ($check->fetch()) Response::error('A user with this email already exists.', 4
 
 $hash = Auth::hashPassword($password);
 $stmt = $pdo->prepare(
-    "INSERT INTO users (name, email, password_hash, role, is_active, created_at) VALUES (?, ?, ?, ?, 1, NOW())"
+    "INSERT INTO users (name, email, password_hash, role, is_active, email_verified_at, created_at) VALUES (?, ?, ?, ?, 1, NOW(), NOW())"
 );
 $stmt->execute([$name, $email, $hash, $role]);
 $newId = (int)$pdo->lastInsertId();
