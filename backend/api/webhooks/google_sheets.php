@@ -39,6 +39,11 @@ try {
                      $data['security_token'] ?? 
                      '';
     
+    // Normalize token if it came from Authorization: Bearer header
+    if (stripos($providedToken, 'Bearer ') === 0) {
+        $providedToken = trim(substr($providedToken, 7));
+    }
+    
     unset($data['security_token']); // Remove token from internal data log
 
     // Check if any source matches this token
@@ -48,7 +53,7 @@ try {
 
     $matchedSource = null;
     foreach ($sources as $source) {
-        if ($source['verify_token'] === $providedToken) {
+        if (isset($source['verify_token']) && hash_equals((string)$source['verify_token'], (string)$providedToken)) {
             $matchedSource = $source;
             break;
         }
@@ -133,7 +138,7 @@ try {
             foreach ($formats as $fmt) {
                 $dt = DateTime::createFromFormat($fmt, $val);
                 $errors = DateTime::getLastErrors();
-                if ($dt !== false && $errors['error_count'] === 0) {
+                if ($dt !== false && is_array($errors) && $errors['error_count'] === 0) {
                     $parsedDate = $dt->setTimezone(new DateTimeZone('Asia/Kolkata'))->format('Y-m-d H:i:s');
                     break;
                 }
@@ -168,8 +173,10 @@ try {
     echo "OK";
 
 } catch (Throwable $e) {
-    $processor->updateLogStatus($logId, 'failed', null, $e->getMessage());
-    error_log("Google Sheets Webhook Error: " . $e->getMessage());
+    if (isset($processor) && isset($logId)) {
+        $processor->updateLogStatus($logId, 'failed', null, $e->getMessage());
+    }
+    error_log("Google Sheets Webhook Error: " . $e->getMessage() . "\n" . $e->getTraceAsString());
     http_response_code(500);
-    exit("Internal Server Error: " . $e->getMessage());
+    exit("Internal Server Error");
 }

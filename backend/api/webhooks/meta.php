@@ -69,6 +69,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Fetch full lead data from Graph API
                     $details = fetchMetaLeadDetails($leadId);
                     
+                    if (empty($details)) {
+                        error_log("Meta Webhook: Failed to fetch lead details for leadgen_id: $leadId. Skipping.");
+                        continue;
+                    }
+
                     // Safe name concatenation
                     $firstName = trim((string)($details['first_name'] ?? ''));
                     $lastName  = trim((string)($details['last_name'] ?? ''));
@@ -119,7 +124,9 @@ function fetchMetaLeadDetails(string $leadgenId): array {
     }
 
     if ($httpCode >= 400) {
-        error_log("Meta Graph API HTTP Error: $httpCode. Response: $response");
+        $sanitized = preg_replace('/"(access_token|id|email|phone[^"]*)":\s*"[^"]*"/i', '"$1":"***"', $response);
+        $sanitized = substr(str_replace(["\r", "\n"], ' ', $sanitized), 0, 250);
+        error_log("Meta Graph API HTTP Error: $httpCode. Response: $sanitized");
         return [];
     }
 
