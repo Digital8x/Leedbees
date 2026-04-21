@@ -20,9 +20,9 @@ CREATE TABLE IF NOT EXISTS `lead_events` (
 CREATE TABLE IF NOT EXISTS `lead_daily_stats` (
   `id`           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   `stat_date`    DATE NOT NULL,
-  `project`      VARCHAR(150) NULL,
-  `location`     VARCHAR(100) NULL,
-  `source`       VARCHAR(200) NULL,
+  `project`      VARCHAR(150) NOT NULL DEFAULT '',
+  `location`     VARCHAR(100) NOT NULL DEFAULT '',
+  `source`       VARCHAR(200) NOT NULL DEFAULT '',
   `total_leads`  INT UNSIGNED NOT NULL DEFAULT 0,
   `conversions`  INT UNSIGNED NOT NULL DEFAULT 0,
   `duplicates`   INT UNSIGNED NOT NULL DEFAULT 0,
@@ -63,14 +63,14 @@ END //
 CREATE TRIGGER `after_lead_update` AFTER UPDATE ON `leads`
 FOR EACH ROW
 BEGIN
-    -- Handle Assignment
-    IF (OLD.assigned_to IS NULL AND NEW.assigned_to IS NOT NULL) OR (OLD.assigned_to != NEW.assigned_to) THEN
+    -- Handle Assignment (NULL-safe: fires when assigned_to changes even from/to NULL)
+    IF NOT (OLD.assigned_to <=> NEW.assigned_to) THEN
         INSERT INTO `lead_events` (`lead_id`, `event_type`, `timestamp`, `user_id`)
         VALUES (NEW.id, 'Assigned', NOW(), NEW.assigned_to);
     END IF;
 
-    -- Handle Status Changes mapped to logical funnel steps
-    IF OLD.status != NEW.status THEN
+    -- Handle Status Changes mapped to logical funnel steps (NULL-safe)
+    IF NOT (OLD.status <=> NEW.status) THEN
         IF NEW.status IN ('Called') THEN
             INSERT INTO `lead_events` (`lead_id`, `event_type`, `timestamp`, `user_id`) VALUES (NEW.id, 'Contacted', NOW(), NEW.assigned_to);
         ELSEIF NEW.status IN ('Interested', 'Follow Up') THEN

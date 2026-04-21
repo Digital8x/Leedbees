@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios.js';
 import {
@@ -21,30 +21,30 @@ export default function DashboardV2() {
   const [allLocations, setAllLocations] = useState([]);
   const [kpiToggle, setKpiToggle] = useState('today');
 
-  const user = useMemo(() => {
-    try { return JSON.parse(localStorage.getItem('lead8x_user') || '{}'); } catch { return {}; }
-  }, []);
-
   useEffect(() => {
     api.getAllLocations?.()
       .then(r => setAllLocations(r.data?.data?.locations || []))
       .catch(() => setAllLocations([]));
   }, []);
 
-  const loadData = async () => {
+  const loadData = useCallback((signal) => {
     setLoading(true);
-    try {
-      // Mocking the axios call since api.js might not have it yet. We'll add the V2 endpoint logic.
-      const res = await api.get(API_V2_URL, { params: { location } });
-      setData(res.data?.data);
-    } catch {
-      toast.error('Failed to load Dashboard V2 stats');
-    } finally {
-      setLoading(false);
-    }
-  };
+    api.get(API_V2_URL, { params: { location }, signal })
+      .then(res => {
+        setData(res.data?.data ?? null);
+      })
+      .catch(err => {
+        if (err?.name === 'CanceledError' || err?.name === 'AbortError') return; // Ignore stale requests
+        toast.error('Failed to load Dashboard V2 stats');
+      })
+      .finally(() => setLoading(false));
+  }, [location]);
 
-  useEffect(() => { loadData(); }, [location]);
+  useEffect(() => {
+    const controller = new AbortController();
+    loadData(controller.signal);
+    return () => controller.abort(); // Cancel in-flight request on location change
+  }, [loadData]);
 
   if (loading) return (
     <div>
@@ -75,7 +75,7 @@ export default function DashboardV2() {
               {allLocations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
             </select>
           </div>
-          <button className="btn btn-secondary btn-sm" onClick={loadData}><RefreshCw size={14}/> Refresh</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => loadData()}><RefreshCw size={14}/> Refresh</button>
         </div>
       </div>
 
@@ -226,7 +226,7 @@ export default function DashboardV2() {
               <Activity size={16} color="var(--primary)" /> Live Activity Stream
             </div>
             <div style={{ flex: 1, overflowY: 'auto', maxHeight: 460 }}>
-              {stats.activities?.length === 0 ? (
+              {(!stats.activities || stats.activities.length === 0) ? (
                 <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No recent activity.</div>
               ) : (
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>

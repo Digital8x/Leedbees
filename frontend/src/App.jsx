@@ -28,9 +28,6 @@ function DashboardWrapper() {
   return advanced ? <DashboardV2 /> : <Dashboard />
 }
 
-const getUser = () => {
-  try { return JSON.parse(localStorage.getItem('lead8x_user')) } catch { return null }
-}
 
 function PrivateRoute({ children, roles }) {
   const user = getUser()

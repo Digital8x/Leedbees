@@ -80,8 +80,8 @@ try {
         return [
             'actor'  => $a['actor'] ?: 'System',
             'action' => $a['action'],
-            'time'   => (new DateTime($a['time']))->format('H:i A'),
-            'source' => mb_substr($a['info'], 0, 40)
+            'time'   => (new DateTime($a['time']))->format('h:i A'),
+            'source' => mb_substr($a['info'] ?? '', 0, 40)
         ];
     }, $rawActivities);
 

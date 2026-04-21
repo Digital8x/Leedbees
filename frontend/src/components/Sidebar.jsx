@@ -89,13 +89,18 @@ export default function Sidebar() {
 
         {/* Footer */}
         <div className="sidebar-footer">
-          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-hover)', borderRadius: 8, cursor: 'pointer' }} onClick={toggleMode}>
+          <button
+            onClick={toggleMode}
+            aria-pressed={advancedMode}
+            aria-label={advancedMode ? 'Disable Advanced Mode' : 'Enable Advanced Mode'}
+            style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-hover)', borderRadius: 8, cursor: 'pointer', border: 'none', width: '100%' }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Zap size={16} color={advancedMode ? 'var(--primary)' : 'var(--text-muted)'} />
               <span style={{ fontSize: '0.8rem', fontWeight: 600, color: advancedMode ? 'var(--primary)' : 'var(--text-primary)' }}>Advanced</span>
             </div>
             {advancedMode ? <ToggleRight size={20} color="var(--primary)" /> : <ToggleLeft size={20} color="var(--text-muted)" />}
-          </div>
+          </button>
           <div className="user-badge" style={{ marginBottom: 10 }}>
             <div className="user-avatar">{initials}</div>
             <div className="user-info">

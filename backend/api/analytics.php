@@ -22,6 +22,12 @@ $dateRange = Validator::sanitizeString($_GET['dateRange'] ?? '30d');
 $location = Validator::sanitizeString($_GET['location'] ?? null);
 $agent = Validator::sanitizeString($_GET['agent'] ?? null);
 
+// Allowlist dateRange to prevent unfiltered data on unexpected input
+$allowedRanges = ['7d', '30d', '90d', 'all'];
+if (!in_array($dateRange, $allowedRanges, true)) {
+    $dateRange = '30d';
+}
+
 $dateCond = '1=1';
 $dateBind = [];
 if ($dateRange === '7d') {
@@ -31,6 +37,7 @@ if ($dateRange === '7d') {
 } elseif ($dateRange === '90d') {
     $dateCond = 'stat_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)';
 }
+// 'all' intentionally leaves $dateCond = '1=1' (no date restriction)
 
 $locCond = $location ? " AND location = ?" : "";
 $locBind = $location ? [$location] : [];
@@ -95,20 +102,20 @@ try {
     ];
 
     // 6. SECTION G: DATA QUALITY
-    // Get duplicates from daily stats
-    $dupStmt = $pdo->prepare("SELECT SUM(duplicates) as dup, SUM(total_leads) as tot FROM lead_daily_stats WHERE $dateCond $locCond");
-    $dupStmt->execute(array_merge($dateBind, $locBind));
-    $dupRow = $dupStmt->fetch(PDO::FETCH_ASSOC);
-    
-    // Invalid (Not interested / Wrong Number)
+    // Get duplicates and total from same source (leads table, same filters as funnel) for consistency
+    $dupLeadsStmt = $pdo->prepare("SELECT COUNT(*) as tot, SUM(is_duplicate) as dup FROM leads WHERE $fCond $fLocCond AND deleted_at IS NULL");
+    $dupLeadsStmt->execute(array_merge($dateBind, $locBind));
+    $dupLeadsRow = $dupLeadsStmt->fetch(PDO::FETCH_ASSOC);
+
+    // Invalid (Not Interested / Wrong Number) — same table, same filters
     $invStmt = $pdo->prepare("SELECT COUNT(*) FROM leads WHERE $fCond $fLocCond AND status IN ('Not Interested', 'Wrong Number') AND deleted_at IS NULL");
     $invStmt->execute(array_merge($dateBind, $locBind));
     $invalidCount = (int)$invStmt->fetchColumn();
 
-    $totLeads = max(1, (int)$dupRow['tot']);
+    $totLeads = max(1, (int)$dupLeadsRow['tot']);
     $dq = [
-        'duplicatePercentage' => round(((int)$dupRow['dup'] / $totLeads) * 100, 1),
-        'invalidPercentage' => round(($invalidCount / $totLeads) * 100, 1)
+        'duplicatePercentage' => round(((int)$dupLeadsRow['dup'] / $totLeads) * 100, 1),
+        'invalidPercentage'   => round(($invalidCount / $totLeads) * 100, 1)
     ];
 
     Response::success('OK', [

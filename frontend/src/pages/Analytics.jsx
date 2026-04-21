@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api/axios.js';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ErrorBar, LineChart, Line, AreaChart, Area, Legend
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend
 } from 'recharts';
 import {
-  TrendingUp, Users, Target, Clock, Map as MapIcon, Database, Filter, Download, Zap, ChevronDown
+  TrendingUp, Users, Target, Clock, Database, Filter, Download, Loader
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -33,11 +33,40 @@ export default function Analytics() {
     }
   };
 
+  const [exportLoading, setExportLoading] = useState(false);
+
+  const handleExportCustomReport = async () => {
+    if (exportLoading) return;
+    setExportLoading(true);
+    try {
+      // Build CSV from currently loaded data
+      const rows = [['Source', 'Leads', 'Converted', 'Win Rate']];
+      (data?.sourceROI || []).forEach(s => {
+        const pct = (s.leads > 0 && isFinite(s.converted / s.leads))
+          ? ((s.converted / s.leads) * 100).toFixed(1) : '0.0';
+        rows.push([s.source || 'Unknown', s.leads, s.converted, pct + '%']);
+      });
+      const csv = rows.map(r => r.join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `analytics_report_${filters.dateRange}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Report exported!');
+    } catch {
+      toast.error('Export failed. Please try again.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   // Populate filter dropdowns from global meta endpoints
   useEffect(() => {
     Promise.all([
       api.getAllLocations?.().catch(() => ({ data: { data: { locations: [] } } })),
-      api.getUsers?.().catch(() => ({ data: { data: [] } }))
+      api.getUsers?.().catch(() => ({ data: { data: { users: [] } } }))
       // could add api.getAllProjects and sources here.
     ]).then(([locRes, usersRes]) => {
       setMeta(prev => ({
@@ -72,7 +101,14 @@ export default function Analytics() {
       <div className="topbar">
         <h1>Analytics War Room 📈</h1>
         <div className="topbar-actions">
-          <button className="btn btn-primary btn-sm"><Download size={14}/> Export Custom Report</button>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={handleExportCustomReport}
+            disabled={exportLoading || !data}
+            title={!data ? 'Load data first to export' : 'Export report as CSV'}
+          >
+            {exportLoading ? <Loader size={14} className="spin" /> : <Download size={14}/>} {exportLoading ? 'Exporting...' : 'Export Custom Report'}
+          </button>
         </div>
       </div>
 
@@ -164,7 +200,7 @@ export default function Analytics() {
                       <td>{s.source || 'Unknown'}</td>
                       <td>{s.leads}</td>
                       <td style={{color:'var(--success)', fontWeight:600}}>{s.converted}</td>
-                      <td><span style={{background:'var(--bg-hover)', padding:'2px 8px', borderRadius:20, fontSize:'0.75rem'}}>{((s.converted/s.leads)*100 || 0).toFixed(1)}%</span></td>
+                      <td><span style={{background:'var(--bg-hover)', padding:'2px 8px', borderRadius:20, fontSize:'0.75rem'}}>{(s.leads > 0 && isFinite(s.converted / s.leads) ? ((s.converted / s.leads) * 100) : 0).toFixed(1)}%</span></td>
                     </tr>
                   ))}
                 </tbody>
