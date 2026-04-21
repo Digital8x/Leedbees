@@ -1,6 +1,6 @@
 <?php
 // backend/api/analytics.php
-// Highly optimized endpoints for the V2 Analytics War Room using aggregated data
+// Live Analytics War Room logic
 
 declare(strict_types=1);
 
@@ -11,50 +11,40 @@ require_once dirname(__DIR__) . '/core/Auth.php';
 require_once dirname(__DIR__) . '/utils/Validator.php';
 
 Response::setCorsHeaders();
-$user = Auth::requireAuth(['Admin', 'Manager']);
-
-if ($_SERVER['REQUEST_METHOD'] !== 'GET') Response::error('Method not allowed', 405);
-
-$pdo = Database::getConnection();
-
-// --- FILTERS ---
-$dateRange = Validator::sanitizeString($_GET['dateRange'] ?? 'all');
-$location  = Validator::sanitizeString($_GET['location'] ?? null);
-$agent     = Validator::sanitizeString($_GET['agent'] ?? null);
-
-// Default condition if 'all' or empty
-$dateCond = '1=1';
-$dateBind = [];
-if ($dateRange === '7d') {
-    $dateCond = 'l.created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
-} elseif ($dateRange === '30d') {
-    $dateCond = 'l.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)';
-} elseif ($dateRange === '90d') {
-    $dateCond = 'l.created_at >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)';
-} elseif ($dateRange === 'today') {
-    $dateCond = 'l.created_at >= CURDATE()';
-} elseif ($dateRange === 'yesterday') {
-    $dateCond = 'l.created_at >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND l.created_at < CURDATE()';
-}
-
-
-// 'all' intentionally leaves $dateCond = '1=1' (no date restriction)
-
-$locCond = "";
-$locBind = [];
-if ($location) {
-    $locCond = " AND (l.project IN (SELECT project_name FROM project_locations WHERE TRIM(location) = ?) OR TRIM(l.city) = ?)";
-    $locBind = [$location, $location];
-}
-
 
 try {
-    // Attempt triggering aggregation asynchronously so we have fresh data for the day
-    AnalyticsHelpers::triggerAsyncAggregation();
-} catch (\Exception $e) {}
+    $user = Auth::requireAuth(['Admin', 'Manager']);
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') Response::error('Method not allowed', 405);
 
-try {
-    // 1. SECTION A: PERFORMANCE DASHBOARD (Live Leads - Assigned Only)
+    $pdo = Database::getConnection();
+
+    // --- FILTERS ---
+    $dateRange = Validator::sanitizeString($_GET['dateRange'] ?? 'all');
+    $location  = Validator::sanitizeString($_GET['location'] ?? null);
+
+    // Default condition
+    $dateCond = '1=1';
+    $dateBind = [];
+    if ($dateRange === '7d') {
+        $dateCond = 'l.created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
+    } elseif ($dateRange === '30d') {
+        $dateCond = 'l.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)';
+    } elseif ($dateRange === '90d') {
+        $dateCond = 'l.created_at >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)';
+    } elseif ($dateRange === 'today') {
+        $dateCond = 'l.created_at >= CURDATE()';
+    } elseif ($dateRange === 'yesterday') {
+        $dateCond = 'l.created_at >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND l.created_at < CURDATE()';
+    }
+
+    $locCond = "";
+    $locBind = [];
+    if ($location) {
+        $locCond = " AND (l.project IN (SELECT project_name FROM project_locations WHERE TRIM(location) = ?) OR TRIM(l.city) = ?)";
+        $locBind = [$location, $location];
+    }
+
+    // SECTION A: PERFORMANCE
     $perfStmt = $pdo->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN status = 'Booked' THEN 1 ELSE 0 END) as converted FROM leads l WHERE $dateCond $locCond AND assigned_to IS NOT NULL AND deleted_at IS NULL");
     $perfStmt->execute(array_merge($dateBind, $locBind));
     $perf = $perfStmt->fetch(PDO::FETCH_ASSOC);
@@ -62,30 +52,24 @@ try {
     $convertedLeads = (int)$perf['converted'];
     $conversionRate = $totalLeads > 0 ? round(($convertedLeads / $totalLeads) * 100, 1) : 0;
 
-    // 2. SECTION B: SOURCE ROI (Live Leads - Assigned Only)
+    // SECTION B: SOURCE ROI
     $srcStmt = $pdo->prepare("SELECT first_source as source, COUNT(*) as leads, SUM(CASE WHEN status = 'Booked' THEN 1 ELSE 0 END) as converted FROM leads l WHERE $dateCond $locCond AND assigned_to IS NOT NULL AND deleted_at IS NULL GROUP BY first_source ORDER BY leads DESC LIMIT 10");
     $srcStmt->execute(array_merge($dateBind, $locBind));
     $sourceROI = $srcStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 3. SECTION C: AGENT INTELLIGENCE (Live Leads)
-    // Refined to include location filter and deletion check within the JOIN
+    // SECTION C: AGENT INTELLIGENCE
     $agtStmt = $pdo->prepare("SELECT u.name, COUNT(l.id) as assigned, SUM(CASE WHEN l.status = 'Booked' THEN 1 ELSE 0 END) as converted 
                                FROM users u 
-                               LEFT JOIN leads l ON l.assigned_to = u.id AND $dateCond AND l.deleted_at IS NULL $locCond 
+                               LEFT JOIN leads l ON l.assigned_to = u.id AND $dateCond AND l.deleted_at IS NULL $locCond
                                WHERE u.role IN ('Manager', 'Agent') 
                                GROUP BY u.id 
                                ORDER BY converted DESC");
     $agtStmt->execute(array_merge($dateBind, $locBind));
     $agents = $agtStmt->fetchAll(PDO::FETCH_ASSOC);
 
-
-
-
-    // 4. SECTION D: FUNNEL (Using Waterfall logic on live leads - Assigned Only)
+    // SECTION D: FUNNEL
     $fLocCond = $location ? " AND (l.project IN (SELECT project_name FROM project_locations WHERE TRIM(location) = ?) OR TRIM(l.city) = ?) " : "";
     $fLocBind = $location ? [$location, $location] : [];
-
-
     $funnelStmt = $pdo->prepare("
         SELECT 
             COUNT(*) as total,
@@ -95,7 +79,6 @@ try {
             SUM(CASE WHEN status = 'Booked' THEN 1 ELSE 0 END) as closed
         FROM leads l WHERE $dateCond $fLocCond AND assigned_to IS NOT NULL AND deleted_at IS NULL
     ");
-
     $funnelStmt->execute(array_merge($dateBind, $fLocBind));
     $fRow = $funnelStmt->fetch(PDO::FETCH_ASSOC);
 
@@ -108,18 +91,10 @@ try {
         ['name' => 'Closed',    'count' => (int)$fRow['closed'],    'dropPercentage' => 0]
     ];
 
-    // 5. SECTION E: TIME ANALYTICS
-    $time = [
-        'avgResponseMins' => 30, // Mocked for now (would calculate from lead_events)
-        'avgConversionDays' => 14
-    ];
-
-    // 6. SECTION G: DATA QUALITY (Live - Assigned Only)
+    // SECTION E: DATA QUALITY
     $dqStmt = $pdo->prepare("SELECT COUNT(*) as tot, SUM(is_duplicate) as dup, SUM(CASE WHEN status IN ('Not Interested', 'Wrong Number') THEN 1 ELSE 0 END) as invalid FROM leads l WHERE $dateCond $fLocCond AND assigned_to IS NOT NULL AND deleted_at IS NULL");
-
     $dqStmt->execute(array_merge($dateBind, $fLocBind));
     $dqRow = $dqStmt->fetch(PDO::FETCH_ASSOC);
-
     $totLeads = max(1, (int)$dqRow['tot']);
     $dq = [
         'duplicatePercentage' => round(((int)$dqRow['dup'] / $totLeads) * 100, 1),
@@ -132,23 +107,12 @@ try {
             'convertedLeads' => $convertedLeads,
             'conversionRate' => $conversionRate
         ],
-        'sourceROI' => $sourceROI,
-        'agents' => $agents,
         'funnel' => $funnel,
-        'time' => $time,
+        'agents' => $agents,
+        'sourceROI' => $sourceROI,
         'dataQuality' => $dq
     ]);
 
-} catch (\Exception $e) {
-    error_log('Analytics Error: ' . $e->getMessage());
-    Response::error('Failed to load analytics.', 500);
-}
-
-class AnalyticsHelpers {
-    public static function triggerAsyncAggregation() {
-        // Non-blocking trigger to run aggregate.php via cli or basic hit
-        // To be safe and compliant with diverse servers, we'll just omit auto-trigger if not available,
-        // relying on the manual cron job or the user running it.
-        // It's safest not to block.
-    }
+} catch (Exception $e) {
+    Response::error("Analytics Engine halted: " . $e->getMessage(), 500);
 }
