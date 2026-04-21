@@ -26,16 +26,17 @@ $agent     = Validator::sanitizeString($_GET['agent'] ?? null);
 $dateCond = '1=1';
 $dateBind = [];
 if ($dateRange === '7d') {
-    $dateCond = 'created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
+    $dateCond = 'l.created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
 } elseif ($dateRange === '30d') {
-    $dateCond = 'created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)';
+    $dateCond = 'l.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)';
 } elseif ($dateRange === '90d') {
-    $dateCond = 'created_at >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)';
+    $dateCond = 'l.created_at >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)';
 } elseif ($dateRange === 'today') {
-    $dateCond = 'created_at >= CURDATE()';
+    $dateCond = 'l.created_at >= CURDATE()';
 } elseif ($dateRange === 'yesterday') {
-    $dateCond = 'created_at >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND created_at < CURDATE()';
+    $dateCond = 'l.created_at >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND l.created_at < CURDATE()';
 }
+
 
 // 'all' intentionally leaves $dateCond = '1=1' (no date restriction)
 
@@ -52,7 +53,7 @@ try {
 
 try {
     // 1. SECTION A: PERFORMANCE DASHBOARD (Live Leads - Assigned Only)
-    $perfStmt = $pdo->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN status = 'Booked' THEN 1 ELSE 0 END) as converted FROM leads WHERE $dateCond $locCond AND assigned_to IS NOT NULL AND deleted_at IS NULL");
+    $perfStmt = $pdo->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN status = 'Booked' THEN 1 ELSE 0 END) as converted FROM leads l WHERE $dateCond $locCond AND assigned_to IS NOT NULL AND deleted_at IS NULL");
     $perfStmt->execute(array_merge($dateBind, $locBind));
     $perf = $perfStmt->fetch(PDO::FETCH_ASSOC);
     $totalLeads = (int)$perf['total'];
@@ -60,14 +61,22 @@ try {
     $conversionRate = $totalLeads > 0 ? round(($convertedLeads / $totalLeads) * 100, 1) : 0;
 
     // 2. SECTION B: SOURCE ROI (Live Leads - Assigned Only)
-    $srcStmt = $pdo->prepare("SELECT first_source as source, COUNT(*) as leads, SUM(CASE WHEN status = 'Booked' THEN 1 ELSE 0 END) as converted FROM leads WHERE $dateCond $locCond AND assigned_to IS NOT NULL AND deleted_at IS NULL GROUP BY first_source ORDER BY leads DESC LIMIT 10");
+    $srcStmt = $pdo->prepare("SELECT first_source as source, COUNT(*) as leads, SUM(CASE WHEN status = 'Booked' THEN 1 ELSE 0 END) as converted FROM leads l WHERE $dateCond $locCond AND assigned_to IS NOT NULL AND deleted_at IS NULL GROUP BY first_source ORDER BY leads DESC LIMIT 10");
     $srcStmt->execute(array_merge($dateBind, $locBind));
     $sourceROI = $srcStmt->fetchAll(PDO::FETCH_ASSOC);
 
     // 3. SECTION C: AGENT INTELLIGENCE (Live Leads)
-    $agtStmt = $pdo->prepare("SELECT u.name, COUNT(l.id) as assigned, SUM(CASE WHEN l.status = 'Booked' THEN 1 ELSE 0 END) as converted FROM users u LEFT JOIN leads l ON l.assigned_to = u.id AND $dateCond WHERE u.role IN ('Manager', 'Agent') GROUP BY u.id ORDER BY converted DESC");
-    $agtStmt->execute($dateBind);
+    // Refined to include location filter and deletion check within the JOIN
+    $agtLocCond = $location ? str_replace('location', 'l.project', $locCond) : ""; // Map to project if loc is set
+    $agtStmt = $pdo->prepare("SELECT u.name, COUNT(l.id) as assigned, SUM(CASE WHEN l.status = 'Booked' THEN 1 ELSE 0 END) as converted 
+                               FROM users u 
+                               LEFT JOIN leads l ON l.assigned_to = u.id AND $dateCond AND l.deleted_at IS NULL $agtLocCond 
+                               WHERE u.role IN ('Manager', 'Agent') 
+                               GROUP BY u.id 
+                               ORDER BY converted DESC");
+    $agtStmt->execute(array_merge($dateBind, $locBind));
     $agents = $agtStmt->fetchAll(PDO::FETCH_ASSOC);
+
 
 
     // 4. SECTION D: FUNNEL (Using Waterfall logic on live leads - Assigned Only)
@@ -81,8 +90,9 @@ try {
             SUM(CASE WHEN status IN ('Interested', 'Follow Up', 'Site Visit', 'Booked') THEN 1 ELSE 0 END) as qualified,
             SUM(CASE WHEN status IN ('Site Visit', 'Booked') THEN 1 ELSE 0 END) as visit,
             SUM(CASE WHEN status = 'Booked' THEN 1 ELSE 0 END) as closed
-        FROM leads WHERE $dateCond $fLocCond AND assigned_to IS NOT NULL AND deleted_at IS NULL
+        FROM leads l WHERE $dateCond $fLocCond AND assigned_to IS NOT NULL AND deleted_at IS NULL
     ");
+
     $funnelStmt->execute(array_merge($dateBind, $fLocBind));
     $fRow = $funnelStmt->fetch(PDO::FETCH_ASSOC);
 
