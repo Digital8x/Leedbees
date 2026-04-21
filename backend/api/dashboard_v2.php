@@ -143,6 +143,8 @@ try {
     ]);
 
 } catch (Exception $e) {
-    // Return detailed error for troubleshooting
-    Response::error("Dashboard Engine halted: " . $e->getMessage(), 500);
+    // Log sensitive error details to server logs for diagnostics
+    error_log("Dashboard Engine Fault: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+    Response::error("Dashboard Engine halted", 500);
 }
+

@@ -115,5 +115,8 @@ try {
     ]);
 
 } catch (Exception $e) {
-    Response::error("Analytics Engine halted: " . $e->getMessage(), 500);
+    // Log sensitive error details to server logs for diagnostics
+    error_log("Analytics Engine Fault: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+    Response::error("Analytics Engine halted", 500);
 }
+
