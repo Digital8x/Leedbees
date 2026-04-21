@@ -33,17 +33,21 @@ export default function Analytics() {
 
   // Global Filters
   const [filters, setFilters] = useState({
-    dateRange: '30d', project: '', location: '', source: '', agent: ''
+    dateRange: 'all', project: '', location: '', source: '', agent: ''
   });
+  const [error, setError] = useState(null);
+
   
   const [meta, setMeta] = useState({ projects: [], locations: [], sources: [], agents: [] });
 
   const loadData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await api.get(API_ANALYTICS_URL, { params: filters });
       setData(res.data?.data);
     } catch {
+      setError('Analytics processing failed. The system might be under high load.');
       toast.error('Failed to load Advanced Analytics');
     } finally {
       setLoading(false);
@@ -103,7 +107,19 @@ export default function Analytics() {
   if (loading && !data) return (
     <div>
       <div className="topbar"><h1>Analytics War Room 📈</h1></div>
-      <div className="loading-overlay"><div className="spinner"/><span>Crunching Intelligence...</span></div>
+      <div className="loading-overlay"><div className="spinner"/><span>Synchronizing Intelligence...</span></div>
+    </div>
+  );
+
+  if (error && !data) return (
+    <div className="analytics-page">
+       <div className="topbar"><h1>Analytics War Room 📈</h1></div>
+       <div className="page" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+        <AlertTriangle size={48} color="var(--danger)" style={{ marginBottom: 16 }} />
+        <h2 style={{ marginBottom: 8 }}>Analytics Engine Fault</h2>
+        <p style={{ color: 'var(--text-muted)', marginBottom: 20 }}>{error}</p>
+        <button className="btn btn-primary" onClick={loadData}><RefreshCw size={14} style={{ marginRight: 8 }}/> Reconnect Engine</button>
+      </div>
     </div>
   );
 
@@ -137,10 +153,12 @@ export default function Analytics() {
         <div style={{ background: 'var(--bg-card)', padding: '12px 20px', display: 'flex', gap: 15, alignItems: 'center', borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
           <Filter size={16} color="var(--primary)"/>
           <select value={filters.dateRange} onChange={e => updateFilter('dateRange', e.target.value)} className="form-select" style={{ width: 140 }}>
+            <option value="all">Overall (All Time)</option>
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
             <option value="7d">Last 7 Days</option>
             <option value="30d">Last 30 Days</option>
             <option value="90d">Last 3 Months</option>
-            <option value="all">All Time</option>
           </select>
           <select value={filters.location} onChange={e => updateFilter('location', e.target.value)} className="form-select" style={{ width: 150 }}>
             <option value="">All Locations</option>

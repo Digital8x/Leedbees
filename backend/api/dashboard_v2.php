@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') Response::error('Method not allowed', 
 $pdo = Database::getConnection();
 
 $locationFilter = Validator::sanitizeString($_GET['location'] ?? null, 150);
+$dateRange      = Validator::sanitizeString($_GET['dateRange'] ?? 'all'); // Default to 'all'
 
 $active = "deleted_at IS NULL";
 $locCond = '';
@@ -28,28 +29,44 @@ if ($locationFilter) {
     $locBind = [$locationFilter, $locationFilter];
 }
 
-$whereStr = "WHERE $active $locCond";
+$dateCond = '1=1';
+$dateBind = [];
+if ($dateRange === 'today') {
+    $dateCond = 'created_at >= CURDATE()';
+} elseif ($dateRange === 'yesterday') {
+    $dateCond = 'created_at >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND created_at < CURDATE()';
+} elseif ($dateRange === 'month') {
+    $dateCond = "created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')";
+} elseif ($dateRange === 'year') {
+    $dateCond = "created_at >= DATE_FORMAT(NOW(), '%Y-01-01')";
+}
+
+$whereStr = "WHERE $active $locCond AND $dateCond";
+$whereAll = "WHERE $active $locCond"; // For the overall counters in the response if needed
+
 
 // Pre-fetch fast stats
 try {
-    // Basic Counts
+    // Basic Counts - Calculated LIVE from leads table
     $stmtCounts = $pdo->prepare("SELECT 
-        COUNT(*) as total_overall,
-        SUM(CASE WHEN DATE(created_at) = CURDATE() THEN 1 ELSE 0 END) as total_today,
-        SUM(CASE WHEN assigned_to IS NOT NULL THEN 1 ELSE 0 END) as assigned_overall,
-        SUM(CASE WHEN assigned_to IS NULL THEN 1 ELSE 0 END) as unassigned_overall,
-        SUM(CASE WHEN DATE(created_at) = CURDATE() AND assigned_to IS NOT NULL THEN 1 ELSE 0 END) as assigned_today,
-        SUM(CASE WHEN DATE(created_at) = CURDATE() AND assigned_to IS NULL THEN 1 ELSE 0 END) as unassigned_today,
-        SUM(CASE WHEN is_duplicate = 1 THEN 1 ELSE 0 END) as duplicates_overall,
-        SUM(CASE WHEN DATE(created_at) = CURDATE() AND is_duplicate = 1 THEN 1 ELSE 0 END) as duplicates_today,
-        SUM(CASE WHEN status = 'New' THEN 1 ELSE 0 END) as fresh_overall,
-        SUM(CASE WHEN DATE(created_at) = CURDATE() AND status = 'New' THEN 1 ELSE 0 END) as fresh_today
+        COUNT(*) as total,
+        SUM(CASE WHEN assigned_to IS NOT NULL THEN 1 ELSE 0 END) as assigned,
+        SUM(CASE WHEN assigned_to IS NULL THEN 1 ELSE 0 END) as unassigned,
+        SUM(CASE WHEN is_duplicate = 1 THEN 1 ELSE 0 END) as duplicates,
+        SUM(CASE WHEN status = 'New' THEN 1 ELSE 0 END) as fresh
     FROM leads $whereStr");
-    $stmtCounts->execute($locBind);
+    $stmtCounts->execute(array_merge($locBind, $dateBind));
     $counts = $stmtCounts->fetch(PDO::FETCH_ASSOC);
 
-    // Active Users
-    $activeUsers = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE is_active = 1")->fetchColumn();
+    // Get Overall Total for contextual comparison
+    $stmtOverall = $pdo->prepare("SELECT COUNT(*) FROM leads WHERE $active $locCond");
+    $stmtOverall->execute($locBind);
+    $totalOverall = (int)$stmtOverall->fetchColumn();
+
+
+    // Active Users (Online in last 15 mins)
+    $activeUsers = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE last_active >= DATE_SUB(NOW(), INTERVAL 15 MINUTE) AND is_active = 1")->fetchColumn();
+
 
     // Alerts
     $alerts = [];
@@ -105,20 +122,12 @@ try {
 
     // Standardize Response
     $kpis = [
-        'overall' => [
-            'total_leads' => (int)$counts['total_overall'],
-            'assigned_leads' => (int)$counts['assigned_overall'],
-            'unassigned_leads' => (int)$counts['unassigned_overall'],
-            'duplicates' => (int)$counts['duplicates_overall'],
-            'fresh_leads' => (int)$counts['fresh_overall'],
-        ],
-        'today' => [
-            'total_leads' => (int)$counts['total_today'],
-            'assigned_leads' => (int)$counts['assigned_today'],
-            'unassigned_leads' => (int)$counts['unassigned_today'],
-            'duplicates' => (int)$counts['duplicates_today'],
-            'fresh_leads' => (int)$counts['fresh_today'],
-        ]
+        'total_leads'      => (int)$counts['total'],
+        'assigned_leads'   => (int)$counts['assigned'],
+        'unassigned_leads' => (int)$counts['unassigned'],
+        'duplicates'       => (int)$counts['duplicates'],
+        'fresh_leads'      => (int)$counts['fresh'],
+        'total_overall'    => $totalOverall
     ];
 
     Response::success('OK', [

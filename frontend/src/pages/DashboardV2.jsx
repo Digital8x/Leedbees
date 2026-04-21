@@ -17,9 +17,11 @@ export default function DashboardV2() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [location, setLocation] = useState('');
   const [allLocations, setAllLocations] = useState([]);
-  const [kpiToggle, setKpiToggle] = useState('today');
+  const [dateRange, setDateRange] = useState('all'); // Default to Overall (All Time)
+
 
   useEffect(() => {
     api.get('/projects/locations.php', { params: { all_locations: 1 } })
@@ -31,15 +33,17 @@ export default function DashboardV2() {
   const manualRefreshAbortRef = useRef(null); // AbortController for Refresh button
 
   const loadData = useCallback((signal) => {
-    currentSignalRef.current = signal;  // mark this as the current request
+    currentSignalRef.current = signal;
     setLoading(true);
-    api.get(API_V2_URL, { params: { location }, signal })
+    setError(null);
+    api.get(API_V2_URL, { params: { location, dateRange }, signal })
       .then(res => {
         setData(res.data?.data ?? null);
       })
       .catch(err => {
-        if (err?.name === 'CanceledError' || err?.name === 'AbortError') return; // Ignore stale/aborted requests
-        toast.error('Failed to load Dashboard V2 stats');
+        if (err?.name === 'CanceledError' || err?.name === 'AbortError') return;
+        setError('Data flow interrupted. Check your connection.');
+        toast.error('Failed to load Dashboard stats');
       })
       .finally(() => {
         // Only clear loading if this signal is still the active one and was not aborted
@@ -62,41 +66,72 @@ export default function DashboardV2() {
   useEffect(() => {
     const controller = new AbortController();
     loadData(controller.signal);
-    return () => controller.abort(); // Cancel in-flight request on location change
-  }, [loadData]);
+    return () => controller.abort(); 
+  }, [loadData, dateRange, location]);
 
-  if (loading) return (
+  if (loading && !data) return (
     <div>
       <div className="topbar"><h1>Command Center ⚡</h1></div>
-      <div className="loading-overlay"><div className="spinner"/><span>Synchronizing...</span></div>
+      <div className="loading-overlay"><div className="spinner"/><span>Synchronizing Intelligence...</span></div>
+    </div>
+  );
+
+  if (error && !data) return (
+    <div className="analytics-page">
+      <div className="topbar"><h1>Command Center ⚡</h1></div>
+      <div className="page" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+        <AlertTriangle size={48} color="var(--danger)" style={{ marginBottom: 16 }} />
+        <h2 style={{ marginBottom: 8 }}>Internal Data Sync Error</h2>
+        <p style={{ color: 'var(--text-muted)', marginBottom: 20 }}>{error}</p>
+        <button className="btn btn-primary" onClick={handleManualRefresh}><RefreshCw size={14} style={{ marginRight: 8 }}/> Retry Connection</button>
+      </div>
     </div>
   );
 
   const stats = data || {};
   const kpis = stats.kpis || {};
-  const currentKpis = kpiToggle === 'today' ? kpis.today || {} : kpis.overall || {};
+
 
   return (
     <div className="dashboard-v2">
       {/* HEADER */}
       <div className="topbar">
         <h1>Command Center ⚡</h1>
-        <div className="topbar-actions">
-          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-            <MapPin size={14} color="var(--accent)" />
-            <select
-              className="form-select"
-              value={location}
-              onChange={e => setLocation(e.target.value)}
-              style={{ fontSize:'0.82rem', padding:'4px 8px', minWidth:120 }}
-            >
-              <option value="">All Locations</option>
-              {allLocations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
-            </select>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            {/* DATE FILTER DROPDOWN */}
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <Clock size={14} color="var(--primary)" />
+              <select
+                className="form-select"
+                value={dateRange}
+                onChange={e => setDateRange(e.target.value)}
+                style={{ fontSize:'0.82rem', padding:'4px 8px', minWidth:120 }}
+              >
+                <option value="all">Overall (All Time)</option>
+                <option value="today">Today</option>
+                <option value="yesterday">Yesterday</option>
+                <option value="month">This Month</option>
+                <option value="year">This Year</option>
+              </select>
+            </div>
+
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <MapPin size={14} color="var(--accent)" />
+              <select
+                className="form-select"
+                value={location}
+                onChange={e => setLocation(e.target.value)}
+                style={{ fontSize:'0.82rem', padding:'4px 8px', minWidth:120 }}
+              >
+                <option value="">All Locations</option>
+                {allLocations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+              </select>
+            </div>
           </div>
-          <button className="btn btn-secondary btn-sm" onClick={handleManualRefresh}><RefreshCw size={14}/> Refresh</button>
+          <button className="btn btn-secondary btn-sm" onClick={handleManualRefresh} style={{ padding: '6px 12px' }}>
+            {loading ? <RefreshCw size={14} className="spin"/> : <RefreshCw size={14}/>} Refresh
+          </button>
         </div>
-      </div>
 
       <div className="page" style={{ paddingTop: 10 }}>
 
@@ -127,65 +162,56 @@ export default function DashboardV2() {
         {/* KPI SCORING SYSTEM */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 }}>
           <h2 style={{ fontSize: '1.1rem', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <TrendingUp size={18} color="var(--primary)"/> Overview Metrics
+            <TrendingUp size={18} color="var(--primary)"/> Performance Metrics 
+            <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 8 }}>
+              {dateRange === 'all' ? `Showing ${stats.kpis?.total_overall || 0} Total leads` : `Filtered by ${dateRange}`}
+            </span>
           </h2>
-          <div style={{ display: 'flex', background: 'var(--bg-hover)', padding: 3, borderRadius: 20 }}>
-            <button 
-              onClick={() => setKpiToggle('today')} 
-              style={{ padding: '4px 16px', borderRadius: 20, border: 'none', background: kpiToggle==='today'?'var(--primary)':'transparent', color: kpiToggle==='today'?'#fff':'var(--text-muted)', cursor: 'pointer', fontWeight: 600, fontSize: '0.75rem' }}
-            >Today</button>
-            <button 
-              onClick={() => setKpiToggle('overall')} 
-              style={{ padding: '4px 16px', borderRadius: 20, border: 'none', background: kpiToggle==='overall'?'var(--primary)':'transparent', color: kpiToggle==='overall'?'#fff':'var(--text-muted)', cursor: 'pointer', fontWeight: 600, fontSize: '0.75rem' }}
-            >Overall</button>
-          </div>
         </div>
 
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginBottom: 24 }}>
           <div className="stat-card">
             <div className="stat-icon" style={{ background: '#7c3aed22' }}><Users size={22} color="#7c3aed"/></div>
             <div className="stat-content">
-              <div className="stat-value">{currentKpis.total_leads || 0}</div>
+              <div className="stat-value">{stats.kpis?.total_leads || 0}</div>
               <div className="stat-label">Total Leads</div>
             </div>
           </div>
           <div className="stat-card">
             <div className="stat-icon" style={{ background: '#10b98122' }}><CheckCircle size={22} color="#10b981"/></div>
             <div className="stat-content">
-              <div className="stat-value">{currentKpis.assigned_leads || 0}</div>
+              <div className="stat-value">{stats.kpis?.assigned_leads || 0}</div>
               <div className="stat-label">Assigned</div>
             </div>
           </div>
           <div className="stat-card">
              <div className="stat-icon" style={{ background: '#f59e0b22' }}><Clock size={22} color="#f59e0b"/></div>
             <div className="stat-content">
-               <div className="stat-value">{currentKpis.unassigned_leads || 0}</div>
+               <div className="stat-value">{stats.kpis?.unassigned_leads || 0}</div>
                <div className="stat-label">Unassigned</div>
             </div>
           </div>
           <div className="stat-card">
              <div className="stat-icon" style={{ background: '#06b6d422' }}><Zap size={22} color="#06b6d4"/></div>
             <div className="stat-content">
-               <div className="stat-value">{currentKpis.fresh_leads || 0}</div>
-               <div className="stat-label">Fresh (Not Contacted)</div>
+               <div className="stat-value">{stats.kpis?.fresh_leads || 0}</div>
+               <div className="stat-label">Fresh (New Status)</div>
             </div>
           </div>
           <div className="stat-card">
              <div className="stat-icon" style={{ background: '#ef444422' }}><AlertTriangle size={22} color="#ef4444"/></div>
             <div className="stat-content">
-               <div className="stat-value">{currentKpis.duplicates || 0}</div>
+               <div className="stat-value">{stats.kpis?.duplicates || 0}</div>
                <div className="stat-label">Duplicates</div>
             </div>
           </div>
-          {kpiToggle === 'overall' && (
-            <div className="stat-card">
-               <div className="stat-icon" style={{ background: '#8b5cf622' }}><Activity size={22} color="#8b5cf6"/></div>
-              <div className="stat-content">
-                 <div className="stat-value">{stats.active_users || 0}</div>
-                 <div className="stat-label">Active Users</div>
-              </div>
+          <div className="stat-card">
+              <div className="stat-icon" style={{ background: '#8b5cf622' }}><Activity size={22} color="#8b5cf6"/></div>
+            <div className="stat-content">
+                <div className="stat-value">{stats.active_users || 0}</div>
+                <div className="stat-label">Active Users</div>
             </div>
-          )}
+          </div>
         </div>
 
         {/* TWO-COLUMN LAYOUT */}
