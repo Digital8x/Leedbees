@@ -65,7 +65,9 @@ try {
 
 
     // Active Users (Online in last 15 mins)
-    $activeUsers = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE last_active >= DATE_SUB(NOW(), INTERVAL 15 MINUTE) AND is_active = 1")->fetchColumn();
+    // Active Users (Online in last 15 mins via Activity Log)
+    $activeUsers = (int)$pdo->query("SELECT COUNT(DISTINCT user_id) FROM activity_log WHERE created_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE) AND user_id IS NOT NULL")->fetchColumn();
+
 
 
     // Alerts

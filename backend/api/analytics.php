@@ -40,11 +40,13 @@ if ($dateRange === '7d') {
 
 // 'all' intentionally leaves $dateCond = '1=1' (no date restriction)
 
-$locCond = $location ? " AND location = ?" : "";
-$locBind = $location ? [$location] : [];
+$locCond = "";
+$locBind = [];
+if ($location) {
+    $locCond = " AND (l.project IN (SELECT project_name FROM project_locations WHERE TRIM(location) = ?) OR TRIM(l.city) = ?)";
+    $locBind = [$location, $location];
+}
 
-$agentCond = $agent ? " AND agent_id = ?" : "";
-$agentBind = $agent ? [$agent] : [];
 
 try {
     // Attempt triggering aggregation asynchronously so we have fresh data for the day
@@ -67,10 +69,9 @@ try {
 
     // 3. SECTION C: AGENT INTELLIGENCE (Live Leads)
     // Refined to include location filter and deletion check within the JOIN
-    $agtLocCond = $location ? str_replace('location', 'l.project', $locCond) : ""; // Map to project if loc is set
     $agtStmt = $pdo->prepare("SELECT u.name, COUNT(l.id) as assigned, SUM(CASE WHEN l.status = 'Booked' THEN 1 ELSE 0 END) as converted 
                                FROM users u 
-                               LEFT JOIN leads l ON l.assigned_to = u.id AND $dateCond AND l.deleted_at IS NULL $agtLocCond 
+                               LEFT JOIN leads l ON l.assigned_to = u.id AND $dateCond AND l.deleted_at IS NULL $locCond 
                                WHERE u.role IN ('Manager', 'Agent') 
                                GROUP BY u.id 
                                ORDER BY converted DESC");
@@ -79,9 +80,11 @@ try {
 
 
 
+
     // 4. SECTION D: FUNNEL (Using Waterfall logic on live leads - Assigned Only)
-    $fLocCond = $location ? " AND (project IN (SELECT project_name FROM project_locations WHERE location = ?) OR city = ?) " : "";
+    $fLocCond = $location ? " AND (l.project IN (SELECT project_name FROM project_locations WHERE TRIM(location) = ?) OR TRIM(l.city) = ?) " : "";
     $fLocBind = $location ? [$location, $location] : [];
+
 
     $funnelStmt = $pdo->prepare("
         SELECT 
@@ -112,7 +115,8 @@ try {
     ];
 
     // 6. SECTION G: DATA QUALITY (Live - Assigned Only)
-    $dqStmt = $pdo->prepare("SELECT COUNT(*) as tot, SUM(is_duplicate) as dup, SUM(CASE WHEN status IN ('Not Interested', 'Wrong Number') THEN 1 ELSE 0 END) as invalid FROM leads WHERE $dateCond $fLocCond AND assigned_to IS NOT NULL AND deleted_at IS NULL");
+    $dqStmt = $pdo->prepare("SELECT COUNT(*) as tot, SUM(is_duplicate) as dup, SUM(CASE WHEN status IN ('Not Interested', 'Wrong Number') THEN 1 ELSE 0 END) as invalid FROM leads l WHERE $dateCond $fLocCond AND assigned_to IS NOT NULL AND deleted_at IS NULL");
+
     $dqStmt->execute(array_merge($dateBind, $fLocBind));
     $dqRow = $dqStmt->fetch(PDO::FETCH_ASSOC);
 
