@@ -47,7 +47,7 @@ $agentBind = $agent ? [$agent] : [];
 
 try {
     // Attempt triggering aggregation asynchronously so we have fresh data for the day
-    Helpers::triggerAsyncAggregation();
+    AnalyticsHelpers::triggerAsyncAggregation();
 } catch (\Exception $e) {}
 
 try {
@@ -136,7 +136,7 @@ try {
     Response::error('Failed to load analytics.', 500);
 }
 
-class Helpers {
+class AnalyticsHelpers {
     public static function triggerAsyncAggregation() {
         // Non-blocking trigger to run aggregate.php via cli or basic hit
         // To be safe and compliant with diverse servers, we'll just omit auto-trigger if not available,

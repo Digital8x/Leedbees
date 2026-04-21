@@ -22,7 +22,7 @@ export default function DashboardV2() {
   const [kpiToggle, setKpiToggle] = useState('today');
 
   useEffect(() => {
-    api.getAllLocations?.()
+    api.get('/projects/locations.php', { params: { all_locations: 1 } })
       .then(r => setAllLocations(r.data?.data?.locations || []))
       .catch(() => setAllLocations([]));
   }, []);

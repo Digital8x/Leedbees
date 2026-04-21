@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import Login        from './pages/Login.jsx'
-import Dashboard    from './pages/Dashboard.jsx'
 import DashboardV2  from './pages/DashboardV2.jsx'
 import Analytics    from './pages/Analytics.jsx'
 import Leads        from './pages/Leads.jsx'
@@ -18,15 +17,7 @@ const getUser = () => {
   try { return JSON.parse(localStorage.getItem('lead8x_user')) } catch { return null }
 }
 
-function DashboardWrapper() {
-  const [advanced, setAdvanced] = useState(localStorage.getItem('lead8x_advanced') === 'true')
-  useEffect(() => {
-    const handleStorage = () => setAdvanced(localStorage.getItem('lead8x_advanced') === 'true')
-    window.addEventListener('lead8x_mode_change', handleStorage)
-    return () => window.removeEventListener('lead8x_mode_change', handleStorage)
-  }, [])
-  return advanced ? <DashboardV2 /> : <Dashboard />
-}
+
 
 
 function PrivateRoute({ children, roles }) {
@@ -52,7 +43,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/" element={
           <PrivateRoute>
-            <Layout><DashboardWrapper /></Layout>
+            <Layout><DashboardV2 /></Layout>
           </PrivateRoute>
         } />
         <Route path="/analytics" element={

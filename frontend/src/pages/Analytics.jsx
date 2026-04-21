@@ -85,9 +85,8 @@ export default function Analytics() {
   // Populate filter dropdowns from global meta endpoints
   useEffect(() => {
     Promise.all([
-      api.getAllLocations?.().catch(() => ({ data: { data: { locations: [] } } })),
-      api.getUsers?.().catch(() => ({ data: { data: { users: [] } } }))
-      // could add api.getAllProjects and sources here.
+      api.get('/projects/locations.php', { params: { all_locations: 1 } }).catch(() => ({ data: { data: { locations: [] } } })),
+      api.get('/users/list.php').catch(() => ({ data: { data: { users: [] } } }))
     ]).then(([locRes, usersRes]) => {
       setMeta(prev => ({
         ...prev,
