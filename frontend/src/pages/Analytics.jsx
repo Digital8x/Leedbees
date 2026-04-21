@@ -10,6 +10,23 @@ import toast from 'react-hot-toast';
 
 const API_ANALYTICS_URL = '/analytics.php';
 
+/** RFC4180 CSV field escaping — wraps fields that contain commas, quotes, or newlines. */
+function csvEscape(value) {
+  const str = String(value ?? '');
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
+}
+
+/** Compute win-rate percentage string (1 decimal place). Safe against divide-by-zero and Infinity. */
+function computeWinRate(leads, converted) {
+  const l = Number(leads);
+  const c = Number(converted);
+  if (!l || !isFinite(c / l)) return '0.0';
+  return ((c / l) * 100).toFixed(1);
+}
+
 export default function Analytics() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -39,14 +56,17 @@ export default function Analytics() {
     if (exportLoading) return;
     setExportLoading(true);
     try {
-      // Build CSV from currently loaded data
+      // Build CSV from currently loaded data — RFC4180 compliant
       const rows = [['Source', 'Leads', 'Converted', 'Win Rate']];
       (data?.sourceROI || []).forEach(s => {
-        const pct = (s.leads > 0 && isFinite(s.converted / s.leads))
-          ? ((s.converted / s.leads) * 100).toFixed(1) : '0.0';
-        rows.push([s.source || 'Unknown', s.leads, s.converted, pct + '%']);
+        rows.push([
+          s.source || 'Unknown',
+          s.leads,
+          s.converted,
+          computeWinRate(s.leads, s.converted) + '%'
+        ]);
       });
-      const csv = rows.map(r => r.join(',')).join('\n');
+      const csv = rows.map(r => r.map(csvEscape).join(',')).join('\n');
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -200,7 +220,7 @@ export default function Analytics() {
                       <td>{s.source || 'Unknown'}</td>
                       <td>{s.leads}</td>
                       <td style={{color:'var(--success)', fontWeight:600}}>{s.converted}</td>
-                      <td><span style={{background:'var(--bg-hover)', padding:'2px 8px', borderRadius:20, fontSize:'0.75rem'}}>{(s.leads > 0 && isFinite(s.converted / s.leads) ? ((s.converted / s.leads) * 100) : 0).toFixed(1)}%</span></td>
+                      <td><span style={{background:'var(--bg-hover)', padding:'2px 8px', borderRadius:20, fontSize:'0.75rem'}}>{computeWinRate(s.leads, s.converted)}%</span></td>
                     </tr>
                   ))}
                 </tbody>

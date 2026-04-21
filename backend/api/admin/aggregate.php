@@ -45,22 +45,36 @@ try {
     ");
 
     // 2. Fill agent_performance
+    // avg_resp_min = average minutes from lead creation to the agent's first recorded event
     $pdo->exec("
       INSERT INTO agent_performance (agent_id, stat_date, assigned, contacted, converted, avg_resp_min)
-      SELECT 
-        l.assigned_to as agent_id,
-        DATE(l.created_at) as stat_date,
-        COUNT(l.id) as assigned,
-        SUM(CASE WHEN l.status NOT IN ('New', 'Assigned') THEN 1 ELSE 0 END) as contacted,
-        SUM(CASE WHEN l.status = 'Booked' THEN 1 ELSE 0 END) as converted,
-        30 as avg_resp_min
+      SELECT
+        l.assigned_to AS agent_id,
+        DATE(l.created_at) AS stat_date,
+        COUNT(l.id) AS assigned,
+        SUM(CASE WHEN l.status NOT IN ('New', 'Assigned') THEN 1 ELSE 0 END) AS contacted,
+        SUM(CASE WHEN l.status = 'Booked' THEN 1 ELSE 0 END) AS converted,
+        COALESCE(
+          AVG(
+            TIMESTAMPDIFF(MINUTE, l.created_at, fa.first_action_at)
+          ),
+          0
+        ) AS avg_resp_min
       FROM leads l
+      -- Derive each lead's first agent-action timestamp from lead_events
+      LEFT JOIN (
+        SELECT lead_id, MIN(timestamp) AS first_action_at
+        FROM lead_events
+        WHERE event_type IN ('Assigned', 'Contacted', 'Qualified', 'Visit', 'Converted')
+        GROUP BY lead_id
+      ) fa ON fa.lead_id = l.id
       WHERE l.assigned_to IS NOT NULL AND l.deleted_at IS NULL
       GROUP BY l.assigned_to, DATE(l.created_at)
       ON DUPLICATE KEY UPDATE
-        assigned  = VALUES(assigned),
-        contacted = VALUES(contacted),
-        converted = VALUES(converted)
+        assigned     = VALUES(assigned),
+        contacted    = VALUES(contacted),
+        converted    = VALUES(converted),
+        avg_resp_min = VALUES(avg_resp_min)
     ");
 
     $pdo->commit();

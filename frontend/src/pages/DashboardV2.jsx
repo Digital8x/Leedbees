@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios.js';
 import {
@@ -27,18 +27,37 @@ export default function DashboardV2() {
       .catch(() => setAllLocations([]));
   }, []);
 
+  const currentSignalRef = useRef(null);   // tracks the active request signal
+  const manualRefreshAbortRef = useRef(null); // AbortController for Refresh button
+
   const loadData = useCallback((signal) => {
+    currentSignalRef.current = signal;  // mark this as the current request
     setLoading(true);
     api.get(API_V2_URL, { params: { location }, signal })
       .then(res => {
         setData(res.data?.data ?? null);
       })
       .catch(err => {
-        if (err?.name === 'CanceledError' || err?.name === 'AbortError') return; // Ignore stale requests
+        if (err?.name === 'CanceledError' || err?.name === 'AbortError') return; // Ignore stale/aborted requests
         toast.error('Failed to load Dashboard V2 stats');
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        // Only clear loading if this signal is still the active one and was not aborted
+        if (signal === currentSignalRef.current && !signal?.aborted) {
+          setLoading(false);
+        }
+      });
   }, [location]);
+
+  /** Abort any in-flight manual refresh then start a fresh request. */
+  const handleManualRefresh = useCallback(() => {
+    if (manualRefreshAbortRef.current) {
+      manualRefreshAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    manualRefreshAbortRef.current = controller;
+    loadData(controller.signal);
+  }, [loadData]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -75,7 +94,7 @@ export default function DashboardV2() {
               {allLocations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
             </select>
           </div>
-          <button className="btn btn-secondary btn-sm" onClick={() => loadData()}><RefreshCw size={14}/> Refresh</button>
+          <button className="btn btn-secondary btn-sm" onClick={handleManualRefresh}><RefreshCw size={14}/> Refresh</button>
         </div>
       </div>
 
