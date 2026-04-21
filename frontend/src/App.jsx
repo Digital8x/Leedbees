@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import Login        from './pages/Login.jsx'
 import Dashboard    from './pages/Dashboard.jsx'
+import DashboardV2  from './pages/DashboardV2.jsx'
+import Analytics    from './pages/Analytics.jsx'
 import Leads        from './pages/Leads.jsx'
 import Distribution from './pages/Distribution.jsx'
 import Users        from './pages/Users.jsx'
@@ -10,6 +13,20 @@ import WebhookLog      from './pages/WebhookLog.jsx'
 import AutoLeads       from './pages/AutoLeads.jsx'
 import Admin           from './pages/Admin.jsx'
 import ProjectManager  from './pages/ProjectManager.jsx'
+
+const getUser = () => {
+  try { return JSON.parse(localStorage.getItem('lead8x_user')) } catch { return null }
+}
+
+function DashboardWrapper() {
+  const [advanced, setAdvanced] = useState(localStorage.getItem('lead8x_advanced') === 'true')
+  useEffect(() => {
+    const handleStorage = () => setAdvanced(localStorage.getItem('lead8x_advanced') === 'true')
+    window.addEventListener('lead8x_mode_change', handleStorage)
+    return () => window.removeEventListener('lead8x_mode_change', handleStorage)
+  }, [])
+  return advanced ? <DashboardV2 /> : <Dashboard />
+}
 
 const getUser = () => {
   try { return JSON.parse(localStorage.getItem('lead8x_user')) } catch { return null }
@@ -38,7 +55,12 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/" element={
           <PrivateRoute>
-            <Layout><Dashboard /></Layout>
+            <Layout><DashboardWrapper /></Layout>
+          </PrivateRoute>
+        } />
+        <Route path="/analytics" element={
+          <PrivateRoute roles={['Admin','Manager']}>
+            <Layout><Analytics /></Layout>
           </PrivateRoute>
         } />
         <Route path="/leads" element={

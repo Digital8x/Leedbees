@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Upload, GitBranch,
-  Settings, LogOut, Menu, X, Shield, Zap, Activity, FolderKanban
+  Settings, LogOut, Menu, X, Shield, Zap, Activity, FolderKanban, PieChart, ToggleLeft, ToggleRight
 } from 'lucide-react'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
@@ -10,6 +10,7 @@ const getUser = () => { try { return JSON.parse(localStorage.getItem('lead8x_use
 
 const navItems = [
   { to: '/',            label: 'Dashboard',    icon: LayoutDashboard, roles: null },
+  { to: '/analytics',   label: 'Analytics',    icon: PieChart,        roles: ['Admin', 'Manager'], advancedOnly: true },
   { to: '/leads',       label: 'Leads',        icon: Upload,          roles: null },
   { to: '/auto-leads',  label: 'Real-time Leads', icon: Zap,           roles: ['Admin', 'Manager'] },
   { to: '/webhooks',    label: 'Webhooks',      icon: Settings,      roles: ['Admin'] },
@@ -24,6 +25,17 @@ export default function Sidebar() {
   const user = getUser()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  const [advancedMode, setAdvancedMode] = useState(localStorage.getItem('lead8x_advanced') === 'true')
+
+  const toggleMode = () => {
+    const newVal = !advancedMode;
+    setAdvancedMode(newVal);
+    localStorage.setItem('lead8x_advanced', newVal.toString());
+    window.dispatchEvent(new Event('lead8x_mode_change'));
+    if (!newVal && window.location.pathname === '/analytics') {
+      navigate('/');
+    }
+  }
 
   const handleLogout = () => {
     localStorage.removeItem('lead8x_token')
@@ -58,6 +70,7 @@ export default function Sidebar() {
           <div className="nav-section-label">Navigation</div>
           {navItems.map(item => {
             if (item.roles && !item.roles.includes(user?.role)) return null
+            if (item.advancedOnly && !advancedMode) return null
             const Icon = item.icon
             return (
               <NavLink
@@ -76,6 +89,13 @@ export default function Sidebar() {
 
         {/* Footer */}
         <div className="sidebar-footer">
+          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-hover)', borderRadius: 8, cursor: 'pointer' }} onClick={toggleMode}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Zap size={16} color={advancedMode ? 'var(--primary)' : 'var(--text-muted)'} />
+              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: advancedMode ? 'var(--primary)' : 'var(--text-primary)' }}>Advanced</span>
+            </div>
+            {advancedMode ? <ToggleRight size={20} color="var(--primary)" /> : <ToggleLeft size={20} color="var(--text-muted)" />}
+          </div>
           <div className="user-badge" style={{ marginBottom: 10 }}>
             <div className="user-avatar">{initials}</div>
             <div className="user-info">
